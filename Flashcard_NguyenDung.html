@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashcard Học Tiếng Anh</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .flashcard-container {
+            perspective: 1000px;
+        }
+        .flashcard {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+        }
+        .flashcard.is-flipped {
+            transform: rotateY(180deg);
+        }
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem; /* Adjusted for more content */
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            text-align: center;
+        }
+        .card-front {
+            background-color: white;
+            color: #1f2937;
+        }
+        .card-back {
+            background-color: #4f46e5;
+            color: white;
+            transform: rotateY(180deg);
+        }
+        .phonetic-text {
+            font-size: 1.25rem;
+            font-style: normal;
+            margin-top: 0.5rem;
+            color: #64748b;
+        }
+        .example-text {
+            font-size: 1rem;
+            font-style: italic;
+            margin-top: 1rem;
+            color: #e0e7ff;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Quiz styles */
+        .answer-option {
+            transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+        }
+        .answer-option.correct {
+            background-color: #dcfce7; /* green-100 */
+            border-color: #22c55e; /* green-500 */
+            color: #166534; /* green-800 */
+        }
+        .answer-option.incorrect {
+            background-color: #fee2e2; /* red-100 */
+            border-color: #ef4444; /* red-500 */
+            color: #991b1b; /* red-800 */
+        }
+        .answer-option:disabled {
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 flex flex-col md:flex-row h-screen">
+
+    <!-- Sidebar for Folders -->
+    <aside class="w-full md:w-80 bg-white p-6 border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto">
+        <h1 class="text-2xl font-bold text-indigo-600 mb-4">Flashcard Của Tôi</h1>
+        
+        <!-- Streak Display -->
+        <div id="streak-display" class="hidden text-center mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+            <div class="flex justify-center items-center text-orange-500">
+                <i class="fas fa-fire fa-2x"></i>
+                <span id="current-streak" class="text-4xl font-bold ml-2">0</span>
+            </div>
+            <p class="text-sm text-slate-500 mt-1">Chuỗi học hiện tại</p>
+        </div>
+
+        <button id="add-folder-btn" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition mb-4 flex items-center justify-center">
+            <i class="fas fa-plus mr-2"></i> Tạo Thư Mục Mới
+        </button>
+        <div id="folder-list" class="flex-grow overflow-y-auto pr-2">
+            <!-- Folder items will be inserted here -->
+        </div>
+        
+        <!-- Countdown Timer -->
+        <div class="mt-4 pt-4 border-t border-slate-200">
+             <h3 class="font-semibold text-center text-slate-600 mb-2 text-sm">Học tập trung</h3>
+             <div id="timer-display" class="text-4xl font-bold text-center text-indigo-600 mb-3">25:00</div>
+             <div class="flex justify-center space-x-2 mb-3">
+                <button class="set-timer-btn text-xs font-semibold py-1 px-2 bg-indigo-200 rounded-full hover:bg-indigo-300" data-minutes="25">25 phút</button>
+                <button class="set-timer-btn text-xs font-semibold py-1 px-2 bg-slate-200 rounded-full hover:bg-indigo-300" data-minutes="45">45 phút</button>
+                <button class="set-timer-btn text-xs font-semibold py-1 px-2 bg-slate-200 rounded-full hover:bg-indigo-300" data-minutes="60">60 phút</button>
+                <button id="custom-timer-btn" class="text-xs font-semibold py-1 px-2 bg-slate-200 rounded-full hover:bg-indigo-300" title="Tùy chỉnh thời gian"><i class="fas fa-edit"></i></button>
+            </div>
+             <div class="flex justify-center space-x-2">
+                <button id="start-pause-btn" class="flex-1 py-2 px-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition flex items-center justify-center text-sm"><i class="fas fa-play mr-1"></i> Bắt đầu</button>
+                <button id="reset-btn" class="flex-1 py-2 px-2 bg-slate-500 text-white font-semibold rounded-lg hover:bg-slate-600 transition flex items-center justify-center text-sm"><i class="fas fa-redo mr-1"></i> Đặt lại</button>
+            </div>
+        </div>
+
+        <div class="mt-auto pt-4 text-center text-xs text-slate-400">
+            <p>&copy; design by Nguyễn Dũng</p>
+        </div>
+    </aside>
+
+    <!-- Main Content for Flashcards -->
+    <main class="flex-grow p-6 md:p-10 flex flex-col items-center justify-center transition-all duration-300">
+        <div id="welcome-screen" class="text-center">
+            <i class="fas fa-folder-open text-7xl text-slate-300 mb-4"></i>
+            <h2 class="text-3xl font-bold text-slate-600">Chào mừng bạn!</h2>
+            <p class="text-slate-500 mt-2">Hãy chọn một thư mục để bắt đầu học hoặc tạo thư mục mới.</p>
+        </div>
+
+        <div id="flashcard-view" class="hidden w-full max-w-2xl mx-auto flex flex-col items-center">
+            <div class="w-full flex justify-between items-center mb-4">
+                <h2 id="current-folder-name" class="text-3xl font-bold truncate pr-4"></h2>
+                <button id="add-card-to-folder-btn" class="bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600 transition flex items-center shrink-0">
+                    <i class="fas fa-plus mr-2"></i> Thêm Thẻ
+                </button>
+            </div>
+            <div id="flashcard-display-area" class="w-full">
+                <div class="flashcard-container w-full h-72 mb-4">
+                    <div id="flashcard" class="flashcard">
+                        <div class="card-face card-front" id="card-front"></div>
+                        <div class="card-face card-back" id="card-back"></div>
+                    </div>
+                </div>
+                <div class="flex justify-center items-center space-x-4">
+                    <button id="prev-card-btn" class="control-btn p-4 bg-white rounded-full shadow-md hover:bg-slate-200 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-chevron-left text-slate-600"></i>
+                    </button>
+                    <button id="flip-card-btn" class="py-3 px-6 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">Lật Thẻ</button>
+                    <button id="next-card-btn" class="control-btn p-4 bg-white rounded-full shadow-md hover:bg-slate-200 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-chevron-right text-slate-600"></i>
+                    </button>
+                </div>
+                 <div class="text-center mt-4">
+                     <p id="card-counter" class="text-slate-500 mb-2"></p>
+                     <div class="flex justify-center items-center space-x-4">
+                         <button id="edit-card-btn" class="text-slate-400 hover:text-indigo-500 transition text-sm"><i class="fas fa-pencil-alt mr-1"></i> Sửa thẻ</button>
+                         <button id="delete-card-btn" class="text-slate-400 hover:text-red-500 transition text-sm"><i class="fas fa-trash-alt mr-1"></i> Xóa thẻ</button>
+                     </div>
+                 </div>
+            </div>
+            <div id="no-cards-message" class="text-center hidden mt-10">
+                <i class="fas fa-box-open text-7xl text-slate-300 mb-4"></i>
+                <h3 class="text-2xl font-bold text-slate-600">Thư mục này trống!</h3>
+                <p class="text-slate-500 mt-2">Hãy nhấn "Thêm Thẻ" để tạo flashcard đầu tiên của bạn.</p>
+            </div>
+        </div>
+        
+        <div id="quiz-view" class="hidden w-full max-w-2xl mx-auto flex flex-col items-center">
+             <div class="w-full bg-white p-8 rounded-lg shadow-lg">
+                <div class="flex justify-between items-center mb-2">
+                    <div id="quiz-timer" class="text-xl font-bold text-red-500">
+                        <i class="far fa-clock"></i> 00:00
+                    </div>
+                    <p id="quiz-progress" class="text-sm font-semibold text-slate-500"></p>
+                </div>
+
+                <div class="w-full bg-slate-200 rounded-full h-2.5 mb-6">
+                    <div id="quiz-progress-bar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"></div>
+                </div>
+                <p class="text-slate-600 text-center mb-2">Nghĩa của từ này là gì?</p>
+                <h2 id="quiz-question" class="text-4xl font-bold text-center mb-8"></h2>
+                <div id="quiz-options" class="grid grid-cols-1 gap-4"></div>
+                <div class="text-center mt-6">
+                    <button id="next-question-btn" class="hidden w-full md:w-auto py-3 px-8 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">Câu tiếp theo</button>
+                </div>
+            </div>
+        </div>
+        <div id="results-view" class="hidden w-full max-w-2xl mx-auto flex flex-col items-center text-center">
+            <div class="w-full bg-white p-8 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-slate-800">Kết quả bài thi</h2>
+                <p id="final-score" class="text-5xl font-bold text-indigo-600 my-4"></p>
+                <p id="score-message" class="text-slate-600 mb-8"></p>
+                <div id="incorrect-answers-section" class="hidden w-full text-left">
+                    <h3 class="font-bold text-xl mb-4">Các từ cần ôn tập:</h3>
+                    <ul id="incorrect-answers-list" class="space-y-2 bg-slate-50 p-4 rounded-lg max-h-48 overflow-y-auto"></ul>
+                </div>
+                <button id="back-to-folders-btn" class="mt-8 py-3 px-8 bg-slate-600 text-white font-bold rounded-lg hover:bg-slate-700 transition">Về trang chủ</button>
+             </div>
+        </div>
+
+    </main>
+    
+    <div id="add-folder-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h3 class="text-2xl font-bold mb-4">Tạo Thư Mục Mới</h3>
+            <input type="text" id="new-folder-name" placeholder="Nhập tên thư mục..." class="w-full border border-slate-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+            <div class="flex justify-end mt-6 space-x-3">
+                <button type="button" class="modal-cancel-btn py-2 px-5 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Hủy</button>
+                <button id="confirm-add-folder" class="py-2 px-5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Tạo</button>
+            </div>
+        </div>
+    </div>
+    <div id="add-card-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h3 class="text-2xl font-bold mb-4">Thêm Flashcard Mới</h3>
+            <div class="space-y-4">
+                <div>
+                    <label for="english-word-input" class="block font-semibold mb-1">Từ Tiếng Anh</label>
+                    <input type="text" id="english-word-input" placeholder="e.g., Hello" class="w-full border border-slate-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                </div>
+                 <div>
+                    <label for="phonetic-input" class="block font-semibold mb-1">Phiên âm (IPA)</label>
+                    <div class="flex items-center">
+                         <input type="text" id="phonetic-input" placeholder="e.g., həˈloʊ" class="w-full border border-slate-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                         <button id="get-phonetic-btn" class="ml-2 p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition shrink-0" title="Lấy phiên âm tự động">
+                             <i class="fas fa-comment-dots"></i>
+                         </button>
+                    </div>
+                </div>
+                <div>
+                    <label for="vietnamese-meaning-input" class="block font-semibold mb-1">Nghĩa Tiếng Việt</label>
+                    <div class="flex items-center">
+                         <input type="text" id="vietnamese-meaning-input" placeholder="e.g., Xin chào" class="w-full border border-slate-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                         <button id="translate-btn" class="ml-2 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition shrink-0" title="Dịch tự động">
+                             <i class="fas fa-language"></i>
+                         </button>
+                    </div>
+                </div>
+                 <div>
+                    <label for="example-sentence-input" class="block font-semibold mb-1">Câu ví dụ</label>
+                    <div class="flex items-center">
+                         <textarea id="example-sentence-input" placeholder="e.g., Hello world!" class="w-full border border-slate-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" rows="2"></textarea>
+                         <button id="generate-example-btn" class="ml-2 p-3 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition shrink-0" title="Tạo ví dụ tự động">
+                             <i class="fas fa-magic-sparkles"></i>
+                         </button>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end mt-6 space-x-3">
+                <button type="button" class="modal-cancel-btn py-2 px-5 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Hủy</button>
+                <button id="confirm-add-card" class="py-2 px-5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition">Thêm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Card Modal -->
+    <div id="edit-card-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h3 class="text-2xl font-bold mb-4">Chỉnh sửa Flashcard</h3>
+            <form id="edit-card-form">
+                <input type="hidden" id="edit-card-id">
+                <div class="space-y-4">
+                    <div>
+                        <label for="edit-english-word-input" class="block font-semibold mb-1">Từ Tiếng Anh</label>
+                        <input type="text" id="edit-english-word-input" class="w-full border border-slate-300 p-3 rounded-lg">
+                    </div>
+                     <div>
+                        <label for="edit-phonetic-input" class="block font-semibold mb-1">Phiên âm (IPA)</label>
+                        <input type="text" id="edit-phonetic-input" class="w-full border border-slate-300 p-3 rounded-lg">
+                    </div>
+                    <div>
+                        <label for="edit-vietnamese-meaning-input" class="block font-semibold mb-1">Nghĩa Tiếng Việt</label>
+                        <input type="text" id="edit-vietnamese-meaning-input" class="w-full border border-slate-300 p-3 rounded-lg">
+                    </div>
+                     <div>
+                        <label for="edit-example-sentence-input" class="block font-semibold mb-1">Câu ví dụ</label>
+                        <textarea id="edit-example-sentence-input" class="w-full border border-slate-300 p-3 rounded-lg" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="flex justify-end mt-6 space-x-3">
+                    <button type="button" class="modal-cancel-btn py-2 px-5 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Hủy</button>
+                    <button type="submit" class="py-2 px-5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Lưu thay đổi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm">
+            <h3 id="confirm-title" class="text-xl font-bold mb-4">Xác nhận</h3>
+            <p id="confirm-message" class="text-slate-600 mb-6"></p>
+            <div class="flex justify-end space-x-3">
+                <button id="confirm-cancel-btn" class="py-2 px-5 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Hủy</button>
+                <button id="confirm-ok-btn" class="py-2 px-5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">Xóa</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="custom-timer-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm">
+            <h3 class="text-xl font-bold mb-4">Tùy chỉnh thời gian</h3>
+            <p class="text-slate-600 mb-4">Nhập số phút bạn muốn học (1-180):</p>
+            <input type="number" id="custom-minutes-input" class="w-full border border-slate-300 p-3 rounded-lg text-center text-2xl" min="1" max="180" value="10">
+            <div class="flex justify-end mt-6 space-x-3">
+                <button type="button" class="modal-cancel-btn py-2 px-5 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Hủy</button>
+                <button id="confirm-custom-timer-btn" class="py-2 px-5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Đặt giờ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="timer-alert-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm text-center">
+            <i class="far fa-bell text-5xl text-yellow-400 mb-4 animate-bounce"></i>
+            <h3 class="text-2xl font-bold mb-4">Hết giờ!</h3>
+            <p class="text-slate-600 mb-6">Đã hết thời gian học tập trung của bạn.</p>
+            <button id="timer-alert-ok-btn" class="w-full py-2.5 px-5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">OK</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- STATE MANAGEMENT ---
+            let state = {
+                folders: [],
+                activeFolderId: null,
+                currentCardIndex: 0,
+                streak: { current: 0, lastVisit: null },
+                quiz: { 
+                    isActive: false, 
+                    folderId: null, 
+                    questions: [], 
+                    currentQuestionIndex: 0, 
+                    score: 0, 
+                    incorrectAnswers: [],
+                    timer: null,
+                    timeRemaining: 0
+                }
+            };
+
+            // --- DOM ELEMENTS ---
+            const timerAlertModal = document.getElementById('timer-alert-modal');
+            const timerAlertOkBtn = document.getElementById('timer-alert-ok-btn');
+            const customTimerBtn = document.getElementById('custom-timer-btn');
+            const customTimerModal = document.getElementById('custom-timer-modal');
+            const customMinutesInput = document.getElementById('custom-minutes-input');
+            const confirmCustomTimerBtn = document.getElementById('confirm-custom-timer-btn');
+            const streakDisplay = document.getElementById('streak-display');
+            const currentStreakEl = document.getElementById('current-streak');
+            const timerDisplay = document.getElementById('timer-display');
+            const startPauseBtn = document.getElementById('start-pause-btn');
+            const resetBtn = document.getElementById('reset-btn');
+            const folderList = document.getElementById('folder-list');
+            const welcomeScreen = document.getElementById('welcome-screen');
+            const flashcardView = document.getElementById('flashcard-view');
+            const quizView = document.getElementById('quiz-view');
+            const resultsView = document.getElementById('results-view');
+            const currentFolderName = document.getElementById('current-folder-name');
+            const flashcardDisplayArea = document.getElementById('flashcard-display-area');
+            const noCardsMessage = document.getElementById('no-cards-message');
+            const flashcard = document.getElementById('flashcard');
+            const cardFront = document.getElementById('card-front');
+            const cardBack = document.getElementById('card-back');
+            const prevCardBtn = document.getElementById('prev-card-btn');
+            const nextCardBtn = document.getElementById('next-card-btn');
+            const flipCardBtn = document.getElementById('flip-card-btn');
+            const cardCounter = document.getElementById('card-counter');
+            const deleteCardBtn = document.getElementById('delete-card-btn');
+            const editCardBtn = document.getElementById('edit-card-btn');
+            const quizTimerEl = document.getElementById('quiz-timer');
+            const quizProgress = document.getElementById('quiz-progress');
+            const quizProgressBar = document.getElementById('quiz-progress-bar');
+            const quizQuestion = document.getElementById('quiz-question');
+            const quizOptions = document.getElementById('quiz-options');
+            const nextQuestionBtn = document.getElementById('next-question-btn');
+            const finalScore = document.getElementById('final-score');
+            const scoreMessage = document.getElementById('score-message');
+            const incorrectAnswersSection = document.getElementById('incorrect-answers-section');
+            const incorrectAnswersList = document.getElementById('incorrect-answers-list');
+            const backToFoldersBtn = document.getElementById('back-to-folders-btn');
+            const addFolderModal = document.getElementById('add-folder-modal');
+            const addCardModal = document.getElementById('add-card-modal');
+            const editCardModal = document.getElementById('edit-card-modal');
+            const confirmModal = document.getElementById('confirm-modal');
+            const newFolderNameInput = document.getElementById('new-folder-name');
+            const englishWordInput = document.getElementById('english-word-input');
+            const phoneticInput = document.getElementById('phonetic-input');
+            const vietnameseMeaningInput = document.getElementById('vietnamese-meaning-input');
+            const exampleSentenceInput = document.getElementById('example-sentence-input');
+            const addFolderBtn = document.getElementById('add-folder-btn');
+            const addCardToFolderBtn = document.getElementById('add-card-to-folder-btn');
+            const confirmAddFolderBtn = document.getElementById('confirm-add-folder');
+            const confirmAddCardBtn = document.getElementById('confirm-add-card');
+            const translateBtn = document.getElementById('translate-btn');
+            const getPhoneticBtn = document.getElementById('get-phonetic-btn');
+            const generateExampleBtn = document.getElementById('generate-example-btn');
+            const editCardForm = document.getElementById('edit-card-form');
+            const editCardIdInput = document.getElementById('edit-card-id');
+            const editEnglishWordInput = document.getElementById('edit-english-word-input');
+            const editPhoneticInput = document.getElementById('edit-phonetic-input');
+            const editVietnameseMeaningInput = document.getElementById('edit-vietnamese-meaning-input');
+            const editExampleSentenceInput = document.getElementById('edit-example-sentence-input');
+            
+            // --- TIMER STATE (for Pomodoro) ---
+            let timerInterval = null;
+            let initialTime = 25 * 60; // default 25 minutes
+            let timeRemaining = initialTime;
+            let isTimerRunning = false;
+            let audioContext;
+            let alarmInterval = null;
+            let alarmTimeout = null;
+
+            // --- DATA PERSISTENCE ---
+            const saveData = () => localStorage.setItem('flashcardAppV2', JSON.stringify(state));
+            const loadData = () => {
+                const data = localStorage.getItem('flashcardAppV2');
+                if (data) {
+                    const loadedState = JSON.parse(data);
+                    loadedState.quiz = { isActive: false, folderId: null, questions: [], currentQuestionIndex: 0, score: 0, incorrectAnswers: [] };
+                    state = loadedState;
+                    if (!state.streak) {
+                        state.streak = { current: 0, lastVisit: null };
+                    }
+                }
+            };
+            
+            // --- AUDIO & SOUND ---
+            function playBeep() {
+                try {
+                    if (!audioContext) {
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(880, audioContext.currentTime); 
+                    gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.5);
+
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.5);
+                } catch (e) {
+                    console.error("Could not play sound:", e);
+                }
+            }
+
+            function startAlarm() {
+                if (alarmInterval) return;
+                playBeep();
+                alarmInterval = setInterval(playBeep, 1000); // Beep every second
+            }
+
+            function stopAlarm() {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
+                clearTimeout(alarmTimeout);
+                alarmTimeout = null;
+            }
+
+            function speakWord(text) {
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'en-US';
+                    utterance.rate = 0.9;
+                    window.speechSynthesis.speak(utterance);
+                } else {
+                    alert('Trình duyệt của bạn không hỗ trợ tính năng phát âm.');
+                }
+            }
+            
+            // --- API CALLS with Gemini ---
+            async function callGeminiAPI(systemPrompt, userQuery, button) {
+                if (button) {
+                    button.disabled = true;
+                    button.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
+                }
+                
+                // *** BẠN CHỈ CẦN THAY THẾ KEY CỦA MÌNH VÀO ĐÚNG DÒNG NÀY ***
+                // Lấy API key từ Google AI Studio: https://aistudio.google.com/
+                const apiKey = "AIzaSyCGlgq7tNaE-mqopVatjH8gpAM0rk29xPQ"; 
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    generationConfig: { temperature: 0.3 }
+                };
+                try {
+                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) throw new Error(`API error: ${response.status}`);
+                    const result = await response.json();
+                    return result.candidates?.[0]?.content?.parts?.[0]?.text.trim() || "Không có kết quả.";
+                } catch (error) {
+                    console.error("API Call Failed:", error);
+                    return "Lỗi API.";
+                } finally {
+                    if (button) {
+                        button.disabled = false;
+                        if (button.id === 'translate-btn') button.innerHTML = `<i class="fas fa-language"></i>`;
+                        else if (button.id === 'get-phonetic-btn') button.innerHTML = `<i class="fas fa-comment-dots"></i>`;
+                        else button.innerHTML = `<i class="fas fa-magic-sparkles"></i>`;
+                    }
+                }
+            }
+
+            // --- POMODORO TIMER LOGIC ---
+            function updateTimerDisplay() {
+                const minutes = Math.floor(timeRemaining / 60);
+                const seconds = timeRemaining % 60;
+                timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
+
+            function startTimer() {
+                if(isTimerRunning) return;
+                isTimerRunning = true;
+                startPauseBtn.innerHTML = `<i class="fas fa-pause mr-1"></i> Tạm dừng`;
+                startPauseBtn.classList.replace('bg-green-500', 'bg-yellow-500');
+                startPauseBtn.classList.replace('hover:bg-green-600', 'hover:bg-yellow-600');
+
+                timerInterval = setInterval(() => {
+                    timeRemaining--;
+                    updateTimerDisplay();
+                    if (timeRemaining <= 0) {
+                        clearInterval(timerInterval);
+                        isTimerRunning = false;
+                        startAlarm();
+                        showModal(timerAlertModal);
+                        alarmTimeout = setTimeout(() => {
+                           stopAlarm();
+                           hideModal(timerAlertModal);
+                        }, 60000); // auto stop after 1 minute
+                        resetTimer();
+                    }
+                }, 1000);
+            }
+
+            function pauseTimer() {
+                isTimerRunning = false;
+                clearInterval(timerInterval);
+                startPauseBtn.innerHTML = `<i class="fas fa-play mr-1"></i> Tiếp tục`;
+                startPauseBtn.classList.replace('bg-yellow-500', 'bg-green-500');
+                startPauseBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-green-600');
+            }
+            
+            function resetTimer() {
+                clearInterval(timerInterval);
+                isTimerRunning = false;
+                timeRemaining = initialTime;
+                updateTimerDisplay();
+                startPauseBtn.innerHTML = `<i class="fas fa-play mr-1"></i> Bắt đầu`;
+                if(startPauseBtn.classList.contains('bg-yellow-500')){
+                    startPauseBtn.classList.replace('bg-yellow-500', 'bg-green-500');
+                    startPauseBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-green-600');
+                }
+            }
+
+            function setTimer(minutes) {
+                initialTime = minutes * 60;
+                document.querySelectorAll('.set-timer-btn').forEach(btn => {
+                    btn.classList.remove('bg-indigo-200');
+                    btn.classList.add('bg-slate-200');
+                });
+                const selectedBtn = document.querySelector(`.set-timer-btn[data-minutes="${minutes}"]`);
+                if(selectedBtn) {
+                     selectedBtn.classList.remove('bg-slate-200');
+                     selectedBtn.classList.add('bg-indigo-200');
+                } else {
+                    const customBtn = document.getElementById('custom-timer-btn');
+                    customBtn.classList.remove('bg-slate-200');
+                    customBtn.classList.add('bg-indigo-200');
+                }
+                resetTimer();
+            }
+            
+            // --- STREAK LOGIC ---
+            function renderStreak() {
+                if (state.streak && state.streak.current > 0) {
+                    currentStreakEl.textContent = state.streak.current;
+                    streakDisplay.classList.remove('hidden');
+                } else {
+                    streakDisplay.classList.add('hidden');
+                }
+            }
+
+            function checkAndUpdateStreak() {
+                const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+                
+                if (state.streak.lastVisit === today) return; // Already studied today
+
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+                if (state.streak.lastVisit === yesterdayStr) {
+                    state.streak.current++;
+                } else {
+                    state.streak.current = 1;
+                }
+                state.streak.lastVisit = today;
+                saveData();
+                renderStreak();
+            }
+
+            // --- UI RENDERING ---
+            function renderFolders() {
+                folderList.innerHTML = '';
+                if (state.folders.length === 0) {
+                    folderList.innerHTML = `<p class="text-slate-500 text-center mt-4">Chưa có thư mục nào.</p>`;
+                    return;
+                }
+                state.folders.forEach(folder => {
+                    const isActive = folder.id === state.activeFolderId;
+                    const el = document.createElement('div');
+                    el.className = `flex justify-between items-center p-3 rounded-lg cursor-pointer mb-2 transition ${isActive ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-slate-100'}`;
+                    el.innerHTML = `
+                        <div class="flex-grow truncate" data-action="select">
+                            <span class="truncate"><i class="fas fa-folder mr-3 ${isActive ? 'text-indigo-500' : 'text-slate-400'}"></i>${folder.name}</span>
+                        </div>
+                        <div class="flex items-center space-x-3 shrink-0">
+                            <span class="text-sm mr-2 text-slate-500">${folder.cards.length}</span>
+                            <button class="test-folder-btn text-slate-400 hover:text-indigo-500 transition" title="Thi thử"><i class="fas fa-vial"></i></button>
+                            <button class="delete-folder-btn text-slate-400 hover:text-red-500 transition" title="Xóa thư mục"><i class="fas fa-trash-alt"></i></button>
+                        </div>`;
+                    el.addEventListener('click', (e) => {
+                        const actionTarget = e.target.closest('button');
+                        if (actionTarget?.classList.contains('delete-folder-btn')) {
+                            deleteFolder(folder.id);
+                        } else if (actionTarget?.classList.contains('test-folder-btn')) {
+                            startQuiz(folder.id);
+                        } else {
+                            selectFolder(folder.id);
+                        }
+                    });
+                    folderList.appendChild(el);
+                });
+            }
+
+            function renderFlashcards() {
+                if (!state.activeFolderId) {
+                    showView('welcome');
+                    return;
+                }
+                showView('flashcard');
+                
+                const folder = state.folders.find(f => f.id === state.activeFolderId);
+                currentFolderName.textContent = folder.name;
+                
+                if (folder.cards.length === 0) {
+                    flashcardDisplayArea.style.display = 'none';
+                    noCardsMessage.style.display = 'block';
+                } else {
+                    flashcardDisplayArea.style.display = 'block';
+                    noCardsMessage.style.display = 'none';
+                    
+                    flashcard.classList.remove('is-flipped');
+                    const card = folder.cards[state.currentCardIndex];
+                    
+                    cardFront.innerHTML = `
+                        <div class="relative w-full text-center">
+                            <h2 class="text-4xl font-bold">${card.english}</h2>
+                            ${card.phonetic ? `<p class="phonetic-text">/${card.phonetic}/</p>` : ''}
+                            <button class="speak-btn absolute top-1/2 -right-2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition p-4" data-word="${card.english}">
+                                <i class="fas fa-volume-high fa-lg"></i>
+                            </button>
+                        </div>
+                    `;
+                    cardBack.innerHTML = `
+                        <h3 class="text-2xl font-bold">${card.vietnamese}</h3>
+                        ${card.example ? `<p class="example-text">"${card.example}"</p>` : ''}
+                    `;
+                    updateCardControls(folder.cards.length);
+                }
+            }
+            
+            const updateCardControls = (total) => {
+                const disableButtons = total <= 1;
+                prevCardBtn.disabled = disableButtons;
+                nextCardBtn.disabled = disableButtons;
+                cardCounter.textContent = total > 0 ? `${state.currentCardIndex + 1} / ${total}` : '0 / 0';
+            };
+
+            const showView = (viewName) => {
+                [welcomeScreen, flashcardView, quizView, resultsView].forEach(v => v.style.display = 'none');
+                const views = {
+                    welcome: welcomeScreen,
+                    flashcard: flashcardView,
+                    quiz: quizView,
+                    results: resultsView
+                };
+                if (views[viewName]) views[viewName].style.display = views[viewName].id === 'welcome-screen' ? 'block' : 'flex';
+            };
+
+            const showModal = (modal) => modal.classList.remove('hidden');
+            const hideModal = (modal) => {
+                if (modal) {
+                    modal.classList.add('hidden');
+                }
+            }
+            document.querySelectorAll('.modal-cancel-btn').forEach(btn => btn.addEventListener('click', () => hideModal(btn.closest('.fixed'))));
+            
+            function showConfirmModal(message, onConfirm) {
+                const msgEl = document.getElementById('confirm-message');
+                const okBtn = document.getElementById('confirm-ok-btn');
+                msgEl.textContent = message;
+                const newOkBtn = okBtn.cloneNode(true); 
+                okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+                newOkBtn.addEventListener('click', () => { onConfirm(); hideModal(confirmModal); });
+                document.getElementById('confirm-cancel-btn').onclick = () => hideModal(confirmModal);
+                showModal(confirmModal);
+            }
+
+            // --- FOLDER & CARD LOGIC ---
+            function selectFolder(folderId) {
+                state.activeFolderId = folderId;
+                state.currentCardIndex = 0;
+                checkAndUpdateStreak();
+                saveData();
+                renderFolders();
+                renderFlashcards();
+            }
+
+            addFolderBtn.addEventListener('click', () => {
+                newFolderNameInput.value = '';
+                showModal(addFolderModal);
+                newFolderNameInput.focus();
+            });
+
+            confirmAddFolderBtn.addEventListener('click', () => {
+                const name = newFolderNameInput.value.trim();
+                if (!name) return;
+                const newFolder = { id: Date.now().toString(), name, cards: [] };
+                state.folders.push(newFolder);
+                selectFolder(newFolder.id);
+                hideModal(addFolderModal);
+            });
+
+            function deleteFolder(folderId) {
+                showConfirmModal('Bạn có chắc muốn xóa thư mục này và tất cả thẻ bên trong?', () => {
+                    state.folders = state.folders.filter(f => f.id !== folderId);
+                    if (state.activeFolderId === folderId) {
+                        state.activeFolderId = null;
+                        state.currentCardIndex = 0;
+                    }
+                    saveData();
+                    renderFolders();
+                    renderFlashcards();
+                });
+            }
+
+            addCardToFolderBtn.addEventListener('click', () => {
+                englishWordInput.value = '';
+                phoneticInput.value = '';
+                vietnameseMeaningInput.value = '';
+                exampleSentenceInput.value = '';
+                showModal(addCardModal);
+                englishWordInput.focus();
+            });
+
+            confirmAddCardBtn.addEventListener('click', () => {
+                const english = englishWordInput.value.trim();
+                const vietnamese = vietnameseMeaningInput.value.trim();
+                if (!english || !vietnamese || !state.activeFolderId) return;
+                const folder = state.folders.find(f => f.id === state.activeFolderId);
+                folder.cards.push({
+                    id: Date.now().toString(),
+                    english,
+                    phonetic: phoneticInput.value.trim(),
+                    vietnamese,
+                    example: exampleSentenceInput.value.trim()
+                });
+                state.currentCardIndex = folder.cards.length - 1;
+                saveData();
+                renderFolders();
+                renderFlashcards();
+                hideModal(addCardModal);
+            });
+            
+            function deleteCurrentCard() {
+                const folder = state.folders.find(f => f.id === state.activeFolderId);
+                if (!folder || folder.cards.length === 0) return;
+                showConfirmModal(`Bạn có chắc muốn xóa thẻ "${folder.cards[state.currentCardIndex].english}"?`, () => {
+                    folder.cards.splice(state.currentCardIndex, 1);
+                    if (state.currentCardIndex >= folder.cards.length) {
+                        state.currentCardIndex = Math.max(0, folder.cards.length - 1);
+                    }
+                    saveData();
+                    renderFolders();
+                    renderFlashcards();
+                });
+            }
+
+            function openEditModal() {
+                const folder = state.folders.find(f => f.id === state.activeFolderId);
+                if (!folder || folder.cards.length === 0) return;
+
+                const card = folder.cards[state.currentCardIndex];
+                editCardIdInput.value = card.id;
+                editEnglishWordInput.value = card.english;
+                editPhoneticInput.value = card.phonetic || '';
+                editVietnameseMeaningInput.value = card.vietnamese;
+                editExampleSentenceInput.value = card.example || '';
+                
+                showModal(editCardModal);
+            }
+
+            function handleEditFormSubmit(e) {
+                e.preventDefault();
+                const cardId = editCardIdInput.value;
+                const folder = state.folders.find(f => f.id === state.activeFolderId);
+                const card = folder.cards.find(c => c.id === cardId);
+
+                if (card) {
+                    card.english = editEnglishWordInput.value.trim();
+                    card.phonetic = editPhoneticInput.value.trim();
+                    card.vietnamese = editVietnameseMeaningInput.value.trim();
+                    card.example = editExampleSentenceInput.value.trim();
+                    
+                    saveData();
+                    hideModal(editCardModal);
+                    renderFlashcards();
+                }
+            }
+
+            // --- QUIZ LOGIC ---
+            const shuffleArray = (array) => {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            };
+            
+            function startQuiz(folderId) {
+                const folder = state.folders.find(f => f.id === folderId);
+                if (folder.cards.length < 3) {
+                    alert("Bạn cần ít nhất 3 thẻ trong thư mục để bắt đầu bài thi.");
+                    return;
+                }
+                checkAndUpdateStreak();
+                
+                state.quiz = { 
+                    isActive: true, 
+                    folderId, 
+                    questions: [], 
+                    currentQuestionIndex: 0, 
+                    score: 0, 
+                    incorrectAnswers: [],
+                    timer: null,
+                    timeRemaining: 0
+                };
+
+                const allMeanings = folder.cards.map(c => c.vietnamese);
+                state.quiz.questions = folder.cards.map(card => {
+                    const correctAnswer = card.vietnamese;
+                    const distractors = allMeanings.filter(m => m !== correctAnswer);
+                    shuffleArray(distractors);
+                    const options = [correctAnswer, ...distractors.slice(0, 2)];
+                    shuffleArray(options);
+                    return { ...card, options };
+                });
+                shuffleArray(state.quiz.questions);
+
+                state.quiz.timeRemaining = state.quiz.questions.length * 30;
+                state.quiz.timer = setInterval(updateQuizTimer, 1000);
+                
+                renderCurrentQuestion();
+                showView('quiz');
+            }
+
+            function updateQuizTimer() {
+                if (!state.quiz.isActive) {
+                    clearInterval(state.quiz.timer);
+                    return;
+                }
+
+                state.quiz.timeRemaining--;
+                const minutes = Math.floor(state.quiz.timeRemaining / 60);
+                const seconds = state.quiz.timeRemaining % 60;
+                quizTimerEl.innerHTML = `<i class="far fa-clock"></i> ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+                if (state.quiz.timeRemaining <= 0) {
+                    clearInterval(state.quiz.timer);
+                    alert("Hết giờ làm bài!");
+                    showResults();
+                }
+            }
+
+            function renderCurrentQuestion() {
+                const { questions, currentQuestionIndex } = state.quiz;
+                const questionData = questions[currentQuestionIndex];
+                quizProgress.textContent = `Câu ${currentQuestionIndex + 1} / ${questions.length}`;
+                quizProgressBar.style.width = `${((currentQuestionIndex + 1) / questions.length) * 100}%`;
+                quizQuestion.textContent = questionData.english;
+                quizOptions.innerHTML = '';
+                questionData.options.forEach(option => {
+                    const button = document.createElement('button');
+                    button.textContent = option;
+                    button.className = "answer-option w-full p-4 border-2 border-slate-300 rounded-lg font-semibold text-left hover:bg-slate-100";
+                    button.onclick = () => handleAnswerSelection(button, option, questionData.vietnamese);
+                    quizOptions.appendChild(button);
+                });
+                nextQuestionBtn.style.display = 'none';
+            }
+
+            function handleAnswerSelection(button, selectedAnswer, correctAnswer) {
+                Array.from(quizOptions.children).forEach(btn => btn.disabled = true);
+                if (selectedAnswer === correctAnswer) {
+                    button.classList.add('correct');
+                    state.quiz.score++;
+                } else {
+                    button.classList.add('incorrect');
+                    state.quiz.incorrectAnswers.push(state.quiz.questions[state.quiz.currentQuestionIndex]);
+                    Array.from(quizOptions.children).forEach(btn => {
+                        if (btn.textContent === correctAnswer) btn.classList.add('correct');
+                    });
+                }
+                nextQuestionBtn.style.display = 'inline-block';
+            }
+
+            function showResults() {
+                clearInterval(state.quiz.timer);
+                const { score, questions, incorrectAnswers } = state.quiz;
+                finalScore.textContent = `${score} / ${questions.length}`;
+                const percentage = (score / questions.length) * 100;
+                if (percentage === 100) scoreMessage.textContent = "Tuyệt vời! Bạn đã nhớ tất cả các từ.";
+                else if (percentage >= 70) scoreMessage.textContent = "Làm tốt lắm! Cố gắng thêm chút nữa nhé.";
+                else scoreMessage.textContent = "Không sao cả, hãy ôn tập và thử lại nhé!";
+                if (incorrectAnswers.length > 0) {
+                    incorrectAnswersSection.style.display = 'block';
+                    incorrectAnswersList.innerHTML = incorrectAnswers.map(card => `<li><span class="font-bold">${card.english}</span>: ${card.vietnamese}</li>`).join('');
+                } else {
+                    incorrectAnswersSection.style.display = 'none';
+                }
+                showView('results');
+            }
+            
+            // --- EVENT LISTENERS ---
+            startPauseBtn.addEventListener('click', () => {
+                if (isTimerRunning) pauseTimer();
+                else startTimer();
+            });
+            resetBtn.addEventListener('click', resetTimer);
+            document.querySelectorAll('.set-timer-btn').forEach(btn => {
+                btn.addEventListener('click', () => setTimer(parseInt(btn.dataset.minutes)));
+            });
+            customTimerBtn.addEventListener('click', () => {
+                showModal(customTimerModal);
+            });
+            confirmCustomTimerBtn.addEventListener('click', () => {
+                const minutes = parseInt(customMinutesInput.value, 10);
+                if (!isNaN(minutes) && minutes > 0 && minutes <= 180) {
+                    setTimer(minutes);
+                    hideModal(customTimerModal);
+                } else {
+                    alert("Vui lòng nhập một số hợp lệ từ 1 đến 180.");
+                }
+            });
+
+            translateBtn.addEventListener('click', async () => {
+                const englishWord = englishWordInput.value.trim();
+                if (!englishWord) return;
+                const prompt = "You are a concise translator. Only return the most common Vietnamese translation for the given English word or short phrase, without any extra text, quotes, or explanation.";
+                const meaning = await callGeminiAPI(prompt, englishWord, translateBtn);
+                vietnameseMeaningInput.value = meaning;
+            });
+            getPhoneticBtn.addEventListener('click', async () => {
+                const englishWord = englishWordInput.value.trim();
+                if (!englishWord) return;
+                const prompt = `You are a linguistic expert. Provide only the IPA phonetic transcription for the English word "${englishWord}". Do not include slashes (/) or any other text, explanations, or symbols. Just the IPA characters.`;
+                const phonetic = await callGeminiAPI(prompt, englishWord, getPhoneticBtn);
+                phoneticInput.value = phonetic;
+            });
+            generateExampleBtn.addEventListener('click', async () => {
+                const englishWord = englishWordInput.value.trim();
+                if (!englishWord) return;
+                const prompt = `You are a helpful language assistant. Create a simple, clear English example sentence using the word "${englishWord}". Only return the sentence itself, without any extra text, quotes, or explanation.`;
+                const example = await callGeminiAPI(prompt, englishWord, generateExampleBtn);
+                exampleSentenceInput.value = example;
+            });
+
+            flashcardDisplayArea.addEventListener('click', (e) => {
+                const speakBtn = e.target.closest('.speak-btn');
+                if (speakBtn) {
+                    e.stopPropagation();
+                    const wordToSpeak = speakBtn.dataset.word;
+                    if (wordToSpeak) speakWord(wordToSpeak);
+                }
+            });
+            flipCardBtn.addEventListener('click', () => flashcard.classList.toggle('is-flipped'));
+            prevCardBtn.addEventListener('click', () => {
+                const folder = state.folders.find(f => f.id === state.activeFolderId);
+                if (folder && folder.cards.length > 0) {
+                    state.currentCardIndex = (state.currentCardIndex - 1 + folder.cards.length) % folder.cards.length;
+                    renderFlashcards();
+                }
+            });
+            nextCardBtn.addEventListener('click', () => {
+                const folder = state.folders.find(f => f.id === state.activeFolderId);
+                if (folder && folder.cards.length > 0) {
+                    state.currentCardIndex = (state.currentCardIndex + 1) % folder.cards.length;
+                    renderFlashcards();
+                }
+            });
+            deleteCardBtn.addEventListener('click', deleteCurrentCard);
+            editCardBtn.addEventListener('click', openEditModal);
+            editCardForm.addEventListener('submit', handleEditFormSubmit);
+            nextQuestionBtn.addEventListener('click', () => {
+                state.quiz.currentQuestionIndex++;
+                if (state.quiz.currentQuestionIndex < state.quiz.questions.length) {
+                    renderCurrentQuestion();
+                } else {
+                    showResults();
+                }
+            });
+            backToFoldersBtn.addEventListener('click', () => {
+                clearInterval(state.quiz.timer);
+                state.quiz.isActive = false;
+                init();
+            });
+            timerAlertOkBtn.addEventListener('click', () => {
+                stopAlarm();
+                hideModal(timerAlertModal);
+            });
+            
+            // --- INITIALIZATION ---
+            function init() {
+                loadData();
+                renderFolders();
+                renderStreak();
+                setTimer(25);
+                if (state.activeFolderId && state.folders.some(f => f.id === state.activeFolderId)) {
+                    renderFlashcards();
+                } else {
+                    state.activeFolderId = null; 
+                    renderFlashcards();
+                }
+            }
+
+            init();
+        });
+    </script>
+</body>
+</html>
+
