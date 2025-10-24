@@ -1,0 +1,2067 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <!-- Chosen Palette: Calm Neutrals with Indigo Accent -->
+    <!-- Application Structure Plan: Cấu trúc ứng dụng được thiết kế theo mô hình "Hub-and-Spoke" (Trung tâm và Lan tỏa). Thanh bên (Sidebar) là trung tâm (Hub), nơi chứa các thư mục (danh sách chính). Từ đây, người dùng có thể "lan tỏa" (spoke) ra 3 chế độ chính cho mỗi thư mục: 1. Duyệt thẻ (Flashcard View), 2. Làm bài thi (Quiz View), 3. Chơi game (Game View). Cấu trúc này giúp người dùng tập trung vào một thư mục và chọn phương pháp học họ muốn. -->
+    <!-- Visualization & Content Choices: 1. Dữ liệu (Thư mục, Thẻ): Goal(Tổ chức) -> HTML/CSS (Danh sách thư mục, thẻ lật) -> Interaction(Click chọn thư mục, click lật thẻ) -> Justification(Trực quan, dễ hiểu, mô phỏng thẻ thật) -> Library(Vanilla JS). 2. Tiến độ học (Chuỗi ngày, Hẹn giờ): Goal(Thông tin/Động lực) -> HTML/CSS (Số, đồng hồ đếm ngược) -> Interaction(Tự động cập nhật chuỗi, click chạy/dừng hẹn giờ) -> Justification(Cung cấp phản hồi tức thì về kỷ luật) -> Library(Vanilla JS). 3. Bài thi (Trắc nghiệm): Goal(So sánh/Đánh giá) -> HTML/CSS (Câu hỏi, 3 lựa chọn) -> Interaction(Click chọn đáp án, xem kết quả) -> Justification(Phương pháp kiểm tra nhanh và phổ biến) -> Library(Vanilla JS). 4. Game (Nối từ): Goal(Tương tác/Ghi nhớ) -> HTML/CSS (Lưới 3x4, thẻ hiển thị) -> Interaction(Click 2 thẻ để nối, đếm ngược, tính điểm) -> Justification(Game hóa việc học, tăng sự hứng thú) -> Library(Vanilla JS). -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashcard Học Tiếng Anh</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden; /* Fix lỗi thanh cuộn ngang tổng thể */
+        }
+        .flashcard-container {
+            perspective: 1000px;
+            /* SỬA: Đảm bảo container có chiều cao */
+            height: 100%;
+            position: relative; /* Đảm bảo position context cho thẻ absolute */
+        }
+        .flashcard {
+            width: 100%;
+            height: 100%;
+            position: absolute; /* SỬA: Thẻ là absolute trong container */
+            top: 0;
+            left: 0;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+        }
+        .flashcard.is-flipped {
+            transform: rotateY(180deg);
+        }
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            /* SỬA: Đảm bảo top/left cho mặt thẻ */
+            top: 0;
+            left: 0;
+        }
+        .card-front {
+            background-color: white;
+            color: #1f2937;
+            /* Không cần position relative ở đây nữa */
+        }
+        .card-back {
+            background-color: #4f46e5;
+            color: white;
+            transform: rotateY(180deg);
+            justify-content: space-around;
+        }
+        .phonetic-text {
+            font-size: 1.25rem;
+            font-style: normal;
+            margin-top: 0.25rem;
+            color: #64748b;
+        }
+        .example-text {
+            font-size: 1rem;
+            font-style: italic;
+            margin-top: 1rem;
+            color: #e0e7ff;
+        }
+        .part-of-speech {
+            font-size: 1rem;
+            font-style: italic;
+            font-weight: 500;
+            color: #4f46e5;
+            background-color: transparent;
+            padding: 0;
+            border-radius: 0;
+            margin-top: 0.25rem;
+        }
+        .speak-btn {
+            position: absolute;
+            right: 1.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            cursor: pointer; /* Thêm cursor pointer */
+            z-index: 10; /* Đảm bảo nút loa luôn ở trên */
+        }
+        .speak-btn:hover {
+            color: #4f46e5;
+        }
+
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Class để ẩn thanh cuộn */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Quiz styles */
+        .answer-option {
+            transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+        }
+        .answer-option.correct {
+            background-color: #dcfce7;
+            border-color: #22c55e;
+            color: #166534;
+        }
+        .answer-option.incorrect {
+            background-color: #fee2e2;
+            border-color: #ef4444;
+            color: #991b1b;
+        }
+        .answer-option:disabled {
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+
+        /* Game styles (Matching) */
+        .game-tile {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 8px;
+            border: 2px solid #e5e7eb;
+            border-radius: 0.5rem;
+            background-color: white;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s, border-color 0.2s, opacity 0.5s;
+            word-break: break-word;
+            hyphens: auto;
+        }
+        .game-tile .tile-pos {
+            font-size: 0.75rem;
+            font-style: italic;
+            font-weight: 500;
+            color: #4f46e5;
+            margin-top: 2px;
+        }
+        .game-tile.type-word {
+            background-color: #eef2ff;
+        }
+        .game-tile.type-meaning {
+            background-color: #f3f4f6;
+            color: #1f2937;
+        }
+        .game-tile:hover {
+            transform: scale(1.05);
+        }
+        .game-tile.is-selected {
+            background-color: #6366f1;
+            border-color: #4338ca;
+            color: white;
+        }
+        .game-tile.is-selected .tile-pos {
+            color: #e0e7ff;
+        }
+        .game-tile.is-matched {
+            background-color: #22c55e;
+            border-color: #16a34a;
+            color: white;
+            opacity: 0;
+            cursor: default;
+            transform: scale(0.9);
+            transition: transform 0.5s, opacity 0.5s, background-color 0.5s;
+        }
+        .game-tile.is-incorrect {
+            background-color: #ef4444;
+            border-color: #dc2626;
+            color: white;
+            animation: shake 0.5s;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+        }
+
+        /* AI Modal Content */
+        .ai-modal-content {
+            white-space: pre-wrap;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: #374151;
+            max-height: 60vh;
+            overflow-y: auto;
+            background: #f9fafb;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 flex flex-col md:flex-row h-screen overflow-x-hidden">
+
+    <!-- Sidebar for Folders -->
+    <aside class="w-full md:w-80 bg-white p-6 border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto overflow-x-hidden">
+        <h1 class="text-2xl font-bold text-indigo-600 mb-4">Flashcard Của Tôi</h1>
+
+        <div id="streak-display" class="hidden text-center mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+            <div class="flex justify-center items-center text-orange-500">
+                <i class="fas fa-fire fa-2x"></i>
+                <span id="current-streak" class="text-4xl font-bold ml-2">0</span>
+            </div>
+            <p class="text-sm text-slate-500 mt-1">Chuỗi học hiện tại</p>
+        </div>
+
+        <button id="add-folder-btn" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition mb-4 flex items-center justify-center">
+            <i class="fas fa-plus mr-2"></i> Tạo Thư Mục Mới
+        </button>
+        <!-- Thêm class no-scrollbar và overflow-x-hidden -->
+        <div id="folder-list" class="flex-grow overflow-y-auto no-scrollbar overflow-x-hidden">
+            <!-- Folder items will be inserted here -->
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-slate-200">
+             <h3 class="font-semibold text-center text-slate-600 mb-2 text-sm">Học tập trung</h3>
+             <div id="timer-display" class="text-4xl font-bold text-center text-indigo-600 mb-3">25:00</div>
+             <div class="flex justify-center space-x-2 mb-3">
+                <button class="set-timer-btn text-xs font-semibold py-1 px-2 bg-indigo-200 rounded-full hover:bg-indigo-300" data-minutes="25">25 phút</button>
+                <button class="set-timer-btn text-xs font-semibold py-1 px-2 bg-slate-200 rounded-full hover:bg-indigo-300" data-minutes="45">45 phút</button>
+                <button class="set-timer-btn text-xs font-semibold py-1 px-2 bg-slate-200 rounded-full hover:bg-indigo-300" data-minutes="60">60 phút</button>
+                <button id="custom-timer-btn" class="text-xs font-semibold py-1 px-2 bg-slate-200 rounded-full hover:bg-indigo-300" title="Tùy chỉnh thời gian"><i class="fas fa-edit"></i></button>
+            </div>
+             <div class="flex justify-center space-x-2">
+                <button id="start-pause-btn" class="flex-1 py-2 px-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition flex items-center justify-center text-sm"><i class="fas fa-play mr-1"></i> Bắt đầu</button>
+                <button id="reset-btn" class="flex-1 py-2 px-2 bg-slate-500 text-white font-semibold rounded-lg hover:bg-slate-600 transition flex items-center justify-center text-sm"><i class="fas fa-redo mr-1"></i> Đặt lại</button>
+            </div>
+        </div>
+
+        <div class="mt-auto pt-4 text-center text-xs text-slate-400">
+            <p>&copy; design by Nguyễn Dũng</p>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow p-6 md:p-10 flex flex-col items-center justify-center transition-all duration-300 relative h-full overflow-y-auto overflow-x-hidden min-w-0">
+
+        <div id="welcome-screen" class="text-center">
+            <i class="fas fa-folder-open text-7xl text-slate-300 mb-4"></i>
+            <h2 class="text-3xl font-bold text-slate-600">Chào mừng bạn!</h2>
+            <p class="text-slate-500 mt-2">Hãy chọn một thư mục để bắt đầu học hoặc tạo thư mục mới.</p>
+        </div>
+
+        <div id="flashcard-view" class="hidden w-full max-w-2xl mx-auto flex flex-col items-center">
+            <div class="w-full flex justify-between items-center mb-4 flex-wrap gap-2">
+                <h2 id="current-folder-name" class="text-3xl font-bold truncate pr-4"></h2>
+                <div class="flex space-x-2 shrink-0">
+                    <button id="import-cards-btn" class="bg-teal-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-600 transition flex items-center shrink-0" title="Nhập thẻ nhanh">
+                        <i class="fas fa-file-import"></i>
+                    </button>
+                    <button id="add-card-to-folder-btn" class="bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600 transition flex items-center shrink-0">
+                        <i class="fas fa-plus mr-2"></i> Thêm Thẻ
+                    </button>
+                </div>
+            </div>
+            <div id="flashcard-display-area" class="w-full">
+                <!-- SỬA: Đặt chiều cao cố định cho container cha -->
+                <div class="w-full h-72 mb-4 relative">
+                    <div class="flashcard-container w-full h-full">
+                         <div id="flashcard" class="flashcard">
+                             <div class="card-face card-front" id="card-front"></div>
+                             <div class="card-face card-back" id="card-back"></div>
+                         </div>
+                    </div>
+                 </div>
+                <div class="flex justify-center items-center space-x-4">
+                    <button id="prev-card-btn" class="control-btn p-4 bg-white rounded-full shadow-md hover:bg-slate-200 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-chevron-left text-slate-600"></i>
+                    </button>
+                    <button id="flip-card-btn" class="py-3 px-6 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">Lật Thẻ</button>
+                    <button id="next-card-btn" class="control-btn p-4 bg-white rounded-full shadow-md hover:bg-slate-200 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-chevron-right text-slate-600"></i>
+                    </button>
+                </div>
+                 <div class="text-center mt-4">
+                     <p id="card-counter" class="text-slate-500 mb-2"></p>
+                     <div class="flex justify-center items-center space-x-4">
+                         <button id="edit-card-btn" class="text-slate-400 hover:text-indigo-500 transition text-sm"><i class="fas fa-pencil-alt mr-1"></i> Sửa thẻ</button>
+                         <button id="delete-card-btn" class="text-slate-400 hover:text-red-500 transition text-sm"><i class="fas fa-trash-alt mr-1"></i> Xóa thẻ</button>
+                     </div>
+                 </div>
+            </div>
+            <div id="no-cards-message" class="text-center hidden mt-10">
+                <i class="fas fa-box-open text-7xl text-slate-300 mb-4"></i>
+                <h3 class="text-2xl font-bold text-slate-600">Thư mục này trống!</h3>
+                <p class="text-slate-500 mt-2">Hãy nhấn "Thêm Thẻ" để tạo flashcard đầu tiên của bạn.</p>
+            </div>
+        </div>
+
+        <div id="quiz-view" class="hidden w-full max-w-2xl mx-auto flex flex-col items-center">
+             <div class="w-full bg-white p-8 rounded-lg shadow-lg relative">
+                <button id="exit-quiz-btn" class="absolute top-4 right-4 text-slate-400 hover:text-red-500 transition text-2xl">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="flex justify-between items-center mb-2">
+                    <div id="quiz-timer" class="text-xl font-bold text-red-500">
+                        <i class="far fa-clock"></i> 00:00
+                    </div>
+                    <p id="quiz-progress" class="text-sm font-semibold text-slate-500"></p>
+                </div>
+
+                <div class="w-full bg-slate-200 rounded-full h-2.5 mb-6">
+                    <div id="quiz-progress-bar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"></div>
+                </div>
+                <p class="text-slate-600 text-center mb-2">Nghĩa của từ này là gì?</p>
+                <h2 id="quiz-question" class="text-4xl font-bold text-center mb-8"></h2>
+                <div id="quiz-options" class="grid grid-cols-1 gap-4"></div>
+                <div class="text-center mt-6">
+                    <button id="next-question-btn" class="hidden w-full md:w-auto py-3 px-8 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">Câu tiếp theo</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="results-view" class="hidden w-full max-w-2xl mx-auto flex flex-col items-center text-center">
+            <div class="w-full bg-white p-8 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-slate-800">Kết quả bài thi</h2>
+                <p id="final-score" class="text-5xl font-bold text-indigo-600 my-4"></p>
+                <p id="score-message" class="text-slate-600 mb-8"></p>
+                <div id="incorrect-answers-section" class="hidden w-full text-left">
+                    <h3 class="font-bold text-xl mb-4">Các từ cần ôn tập:</h3>
+                    <ul id="incorrect-answers-list" class="space-y-2 bg-slate-50 p-4 rounded-lg max-h-48 overflow-y-auto"></ul>
+                </div>
+                <button id="back-to-folders-btn" class="mt-8 py-3 px-8 bg-slate-600 text-white font-bold rounded-lg hover:bg-slate-700 transition">Về trang chủ</button>
+             </div>
+        </div>
+
+        <div id="game-view" class="hidden w-full max-w-2xl mx-auto flex flex-col items-center">
+            <div class="w-full bg-white p-6 rounded-lg shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-3xl font-bold text-slate-800">Nối từ vựng</h2>
+                    <div class="flex items-center space-x-4">
+                        <div id="game-lives" class="text-xl font-bold text-red-500 flex space-x-1">
+                            <i class="fas fa-heart"></i>
+                            <i class="fas fa-heart"></i>
+                            <i class="fas fa-heart"></i>
+                        </div>
+                        <div id="game-timer" class="text-2xl font-bold text-indigo-600">01:30</div>
+                        <button id="exit-game-btn" class="text-slate-400 hover:text-red-500 transition text-2xl">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="game-board" class="grid grid-cols-4 gap-3">
+                    <!-- Game tiles generated by JS -->
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modals -->
+    <div id="add-folder-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h3 class="text-2xl font-bold mb-4">Tạo Thư Mục Mới</h3>
+            <input type="text" id="new-folder-name" placeholder="Nhập tên thư mục..." class="w-full border border-slate-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+            <div class="flex justify-end mt-6 space-x-3">
+                <button type="button" class="modal-cancel-btn py-2 px-5 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Hủy</button>
+                <button id="confirm-add-folder" class="py-2 px-5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Tạo</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="add-card-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md my-8">
+            <h3 class="text-2xl font-bold mb-4">Thêm Flashcard Mới</h3>
+            <div class="space-y-4">
+                <div>
+                    <label for="english-word-input" class="block font-semibold mb-1">Từ Tiếng Anh</label>
+                    <input type="text" id="english-word-input" placeholder="e.g., Hello" class="w-full border border-slate-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                </div>
+                 <div>
+                    <label for="phonetic-input" class="block font-semibold mb-1">Phiên âm (IPA)</label>
+                    <div class="flex items-center">
+                         <input type="text" id="phonetic-input" placeholder="e.g., həˈloʊ" class="w-full border border-slate-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                         <button id="get-phonetic-btn" class="ml-2 p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition shrink-0" title="Lấy phiên âm tự động">
+                             <i class="fas fa-comment-dots"></i>
+                         </button>
+                    </div>
+                </div>
+                <div>
+                    <label for="part-of-speech-input" class="block font-semibold mb-1">Loại từ (n, v, adj...)</label>
+                    <div class="flex items-center">
+                         <input type="text" id="part-of-speech-input" placeholder="e.g., n, v, adj" class="w-full border border-slate-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                         <button id="get-pos-btn" class="ml-2 p-3 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition shrink-0" title="Lấy loại từ tự động">
+                             <i class="fas fa-bookmark"></i>
+                         </button>
+                    </div>
+                </div>
+                <div>
+                    <label for="vietnamese-meaning-input" class="block font-semibold mb-1">Nghĩa Tiếng Việt</label>
+                    <div class="flex items-center">
+                         <input type="text" id="vietnamese-meaning-input" placeholder="e.g., Xin chào" class="w-full border border-slate-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                         <button id="translate-btn" class="ml-2 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition shrink-0" title="Dịch tự động">
+                             <i class="fas fa-language"></i>
+                         </button>
+                    </div>
+                </div>
+                 <div>
+                    <label for="example-sentence-input" class="block font-semibold mb-1">Câu ví dụ</label>
+                    <div class="flex items-center">
+                         <textarea id="example-sentence-input" placeholder="e.g., Hello world!" class="w-full border border-slate-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" rows="2"></textarea>
+                         <button id="generate-example-btn" class="ml-2 p-3 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition shrink-0" title="Tạo ví dụ tự động">
+                             <i class="fas fa-magic-sparkles"></i>
+                         </button>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end mt-6 space-x-3">
+                <button type="button" class="modal-cancel-btn py-2 px-5 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Hủy</button>
+                <button id="confirm-add-card" class="py-2 px-5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition">Thêm</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-card-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md my-8">
+            <h3 class="text-2xl font-bold mb-4">Chỉnh sửa Flashcard</h3>
+            <form id="edit-card-form">
+                <input type="hidden" id="edit-card-id">
+                <div class="space-y-4">
+                    <div>
+                        <label for="edit-english-word-input" class="block font-semibold mb-1">Từ Tiếng Anh</label>
+                        <input type="text" id="edit-english-word-input" class="w-full border border-slate-300 p-3 rounded-lg">
+                    </div>
+                     <div>
+                        <label for="edit-phonetic-input" class="block font-semibold mb-1">Phiên âm (IPA)</label>
+                        <input type="text" id="edit-phonetic-input" class="w-full border border-slate-300 p-3 rounded-lg">
+                    </div>
+                    <div>
+                        <label for="edit-part-of-speech-input" class="block font-semibold mb-1">Loại từ</label>
+                        <input type="text" id="edit-part-of-speech-input" class="w-full border border-slate-300 p-3 rounded-lg">
+                    </div>
+                    <div>
+                        <label for="edit-vietnamese-meaning-input" class="block font-semibold mb-1">Nghĩa Tiếng Việt</label>
+                        <input type="text" id="edit-vietnamese-meaning-input" class="w-full border border-slate-300 p-3 rounded-lg">
+                    </div>
+                     <div>
+                        <label for="edit-example-sentence-input" class="block font-semibold mb-1">Câu ví dụ</label>
+                        <textarea id="edit-example-sentence-input" class="w-full border border-slate-300 p-3 rounded-lg" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="flex justify-end mt-6 space-x-3">
+                    <button type="button" class="modal-cancel-btn py-2 px-5 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Hủy</button>
+                    <button type="submit" class="py-2 px-5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Lưu thay đổi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="import-cards-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl">
+            <h3 class="text-2xl font-bold mb-4">Nhập thẻ nhanh</h3>
+            <p class="text-slate-600 mb-4">Dán (paste) dữ liệu từ Excel. 5 cột theo thứ tự: <br> <code class="bg-slate-100 p-1 rounded text-sm">Từ vựng</code> | <code class="bg-slate-100 p-1 rounded text-sm">Loại từ</code> | <code class="bg-slate-100 p-1 rounded text-sm">Phiên âm</code> | <code class="bg-slate-100 p-1 rounded text-sm">Nghĩa</code> | <code class="bg-slate-100 p-1 rounded text-sm">Ví dụ</code></p>
+            <textarea id="paste-data-input" class="w-full h-48 border border-slate-300 p-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono text-sm" placeholder="Paste (Ctrl+V) dữ liệu từ Excel vào đây..."></textarea>
+            <p id="import-progress" class="text-sm text-slate-500 mt-2 h-4"></p>
+            <div class="flex justify-end mt-6 space-x-3">
+                <button type="button" class="modal-cancel-btn py-2 px-5 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Hủy</button>
+                <button id="confirm-import-btn" class="py-2 px-5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition">Bắt đầu Nhập</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm">
+            <h3 id="confirm-title" class="text-xl font-bold mb-4">Xác nhận</h3>
+            <p id="confirm-message" class="text-slate-600 mb-6"></p>
+            <div class="flex justify-end space-x-3">
+                <button id="confirm-cancel-btn" class="py-2 px-5 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Hủy</button>
+                <button id="confirm-ok-btn" class="py-2 px-5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="custom-timer-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm">
+            <h3 class="text-xl font-bold mb-4">Tùy chỉnh thời gian</h3>
+            <p class="text-slate-600 mb-4">Nhập số phút bạn muốn học (1-180):</p>
+            <input type="number" id="custom-minutes-input" class="w-full border border-slate-300 p-3 rounded-lg text-center text-2xl" min="1" max="180" value="10">
+            <div class="flex justify-end mt-6 space-x-3">
+                <button type="button" class="modal-cancel-btn py-2 px-5 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Hủy</button>
+                <button id="confirm-custom-timer-btn" class="py-2 px-5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Đặt giờ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="timer-alert-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm text-center">
+            <i class="far fa-bell text-5xl text-yellow-400 mb-4 animate-bounce"></i>
+            <h3 class="text-2xl font-bold mb-4">Hết giờ!</h3>
+            <p class="text-slate-600 mb-6">Đã hết thời gian học tập trung của bạn.</p>
+            <button id="timer-alert-ok-btn" class="w-full py-2.5 px-5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">OK</button>
+        </div>
+    </div>
+
+    <div id="game-over-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm text-center">
+            <i id="game-over-icon" class="fas fa-trophy text-5xl text-yellow-400 mb-4"></i>
+            <h3 id="game-over-title" class="text-2xl font-bold mb-2"></h3>
+            <p id="game-over-message" class="text-slate-600 mb-4"></p>
+            <p id="game-final-score" class="text-3xl font-bold text-indigo-600 mb-6"></p>
+            <div class="flex justify-center space-x-3">
+                <button id="exit-game-modal-btn" class="py-2 px-5 bg-slate-200 text-slate-800 rounded-lg hover:bg-slate-300 transition">Thoát</button>
+                <button id="play-again-btn" class="py-2 px-5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Chơi lại</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- XÓA MODAL AI -->
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            let state = {
+                folders: [],
+                activeFolderId: null,
+                currentCardIndex: 0,
+                streak: { current: 0, lastVisit: null },
+                quiz: {
+                    isActive: false,
+                    folderId: null,
+                    questions: [],
+                    currentQuestionIndex: 0,
+                    score: 0,
+                    incorrectAnswers: [],
+                    timer: null,
+                    timeRemaining: 0
+                },
+                game: {
+                    isActive: false,
+                    folderId: null,
+                    board: [], // { card, type: 'word'/'meaning', pairId }
+                    selectedTile: null, // { element, data }
+                    lives: 3,
+                    score: 0,
+                    matchesLeft: 6,
+                    timer: null,
+                    timeRemaining: 90 // 1.5 minutes
+                }
+            };
+
+            // --- DOM ELEMENTS ---
+            const timerAlertModal = document.getElementById('timer-alert-modal');
+            const timerAlertOkBtn = document.getElementById('timer-alert-ok-btn');
+            const customTimerBtn = document.getElementById('custom-timer-btn');
+            const customTimerModal = document.getElementById('custom-timer-modal');
+            const customMinutesInput = document.getElementById('custom-minutes-input');
+            const confirmCustomTimerBtn = document.getElementById('confirm-custom-timer-btn');
+            const streakDisplay = document.getElementById('streak-display');
+            const currentStreakEl = document.getElementById('current-streak');
+            const timerDisplay = document.getElementById('timer-display');
+            const startPauseBtn = document.getElementById('start-pause-btn');
+            const resetBtn = document.getElementById('reset-btn');
+            const folderList = document.getElementById('folder-list');
+
+            const welcomeScreen = document.getElementById('welcome-screen');
+            const flashcardView = document.getElementById('flashcard-view');
+            const quizView = document.getElementById('quiz-view');
+            const resultsView = document.getElementById('results-view');
+            const gameView = document.getElementById('game-view');
+
+            const currentFolderName = document.getElementById('current-folder-name');
+            const flashcardDisplayArea = document.getElementById('flashcard-display-area');
+            const noCardsMessage = document.getElementById('no-cards-message');
+            const flashcard = document.getElementById('flashcard');
+            const cardFront = document.getElementById('card-front');
+            const cardBack = document.getElementById('card-back');
+            const prevCardBtn = document.getElementById('prev-card-btn');
+            const nextCardBtn = document.getElementById('next-card-btn');
+            const flipCardBtn = document.getElementById('flip-card-btn');
+            const cardCounter = document.getElementById('card-counter');
+            const deleteCardBtn = document.getElementById('delete-card-btn');
+            const editCardBtn = document.getElementById('edit-card-btn');
+
+            const exitQuizBtn = document.getElementById('exit-quiz-btn');
+            const quizTimerEl = document.getElementById('quiz-timer');
+            const quizProgress = document.getElementById('quiz-progress');
+            const quizProgressBar = document.getElementById('quiz-progress-bar');
+            const quizQuestion = document.getElementById('quiz-question');
+            const quizOptions = document.getElementById('quiz-options');
+            const nextQuestionBtn = document.getElementById('next-question-btn');
+
+            const finalScore = document.getElementById('final-score');
+            const scoreMessage = document.getElementById('score-message');
+            const incorrectAnswersSection = document.getElementById('incorrect-answers-section');
+            const incorrectAnswersList = document.getElementById('incorrect-answers-list');
+            const backToFoldersBtn = document.getElementById('back-to-folders-btn');
+
+            const gameBoard = document.getElementById('game-board');
+            const gameLives = document.getElementById('game-lives');
+            const gameTimerEl = document.getElementById('game-timer');
+            const exitGameBtn = document.getElementById('exit-game-btn');
+            const gameOverModal = document.getElementById('game-over-modal');
+            const gameOverIcon = document.getElementById('game-over-icon');
+            const gameOverTitle = document.getElementById('game-over-title');
+            const gameOverMessage = document.getElementById('game-over-message');
+            const gameFinalScore = document.getElementById('game-final-score');
+            const playAgainBtn = document.getElementById('play-again-btn');
+            const exitGameModalBtn = document.getElementById('exit-game-modal-btn');
+
+            const addFolderModal = document.getElementById('add-folder-modal');
+            const addCardModal = document.getElementById('add-card-modal');
+            const editCardModal = document.getElementById('edit-card-modal');
+            const confirmModal = document.getElementById('confirm-modal');
+            const importCardsModal = document.getElementById('import-cards-modal');
+
+            // XÓA DOM AI
+
+            const newFolderNameInput = document.getElementById('new-folder-name');
+            const englishWordInput = document.getElementById('english-word-input');
+            const phoneticInput = document.getElementById('phonetic-input');
+            const partOfSpeechInput = document.getElementById('part-of-speech-input');
+            const vietnameseMeaningInput = document.getElementById('vietnamese-meaning-input');
+            const exampleSentenceInput = document.getElementById('example-sentence-input');
+            const pasteDataInput = document.getElementById('paste-data-input');
+            const importProgress = document.getElementById('import-progress');
+
+            const addFolderBtn = document.getElementById('add-folder-btn');
+            const importCardsBtn = document.getElementById('import-cards-btn');
+            const addCardToFolderBtn = document.getElementById('add-card-to-folder-btn');
+            const confirmAddFolderBtn = document.getElementById('confirm-add-folder');
+            const confirmAddCardBtn = document.getElementById('confirm-add-card');
+            const confirmImportBtn = document.getElementById('confirm-import-btn');
+
+            // XÓA DOM NÚT AI
+            const translateBtn = document.getElementById('translate-btn');
+            const getPhoneticBtn = document.getElementById('get-phonetic-btn');
+            const getPosBtn = document.getElementById('get-pos-btn');
+            const generateExampleBtn = document.getElementById('generate-example-btn');
+
+            const editCardForm = document.getElementById('edit-card-form');
+            const editCardIdInput = document.getElementById('edit-card-id');
+            const editEnglishWordInput = document.getElementById('edit-english-word-input');
+            const editPartOfSpeechInput = document.getElementById('edit-part-of-speech-input');
+            const editPhoneticInput = document.getElementById('edit-phonetic-input');
+            const editVietnameseMeaningInput = document.getElementById('edit-vietnamese-meaning-input');
+            const editExampleSentenceInput = document.getElementById('edit-example-sentence-input');
+
+            let timerInterval = null;
+            let initialTime = 25 * 60;
+            let timeRemaining = initialTime;
+            let isTimerRunning = false;
+            let audioContext;
+            let alarmInterval = null;
+            let alarmTimeout = null;
+
+            // --- DATA PERSISTENCE ---
+             const saveData = () => {
+                 try {
+                     localStorage.setItem('flashcardAppV2', JSON.stringify(state));
+                 } catch (error) {
+                     console.error("Error saving data to localStorage:", error);
+                     // Có thể thông báo cho người dùng về lỗi lưu trữ
+                 }
+             };
+             const loadData = () => {
+                 try {
+                     const data = localStorage.getItem('flashcardAppV2');
+                     if (data) {
+                         const loadedState = JSON.parse(data);
+                         // Reset các state động một cách an toàn
+                         loadedState.quiz = { isActive: false, folderId: null, questions: [], currentQuestionIndex: 0, score: 0, incorrectAnswers: [], timer: null, timeRemaining: 0 };
+                         loadedState.game = { isActive: false, folderId: null, board: [], selectedTile: null, lives: 3, score: 0, matchesLeft: 6, timer: null, timeRemaining: 90 };
+                         state = loadedState;
+                         if (state.study) delete state.study; // Xóa study state nếu còn tồn tại
+                         // Đảm bảo streak luôn tồn tại
+                         if (!state.streak) {
+                             state.streak = { current: 0, lastVisit: null };
+                         }
+                     }
+                 } catch (error) {
+                     console.error("Error loading data from localStorage:", error);
+                     // Nếu load lỗi, reset về state mặc định để tránh lỗi toàn app
+                     state = { folders: [], activeFolderId: null, currentCardIndex: 0, streak: { current: 0, lastVisit: null }, quiz: {}, game: {} };
+                     localStorage.removeItem('flashcardAppV2'); // Xóa dữ liệu lỗi
+                 }
+             };
+
+
+            // --- AUDIO & SOUND ---
+            function playBeep() {
+                try {
+                    if (!audioContext) {
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                     // Thêm kiểm tra trạng thái context
+                     if (audioContext.state === 'suspended') {
+                          audioContext.resume(); // Cố gắng resume nếu bị suspend
+                     }
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+                    gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.5);
+
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.5);
+                } catch (e) {
+                    console.error("Could not play sound:", e);
+                }
+            }
+
+            function startAlarm() {
+                if (alarmInterval) return;
+                playBeep();
+                alarmInterval = setInterval(playBeep, 1000);
+            }
+
+            function stopAlarm() {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
+                clearTimeout(alarmTimeout);
+                alarmTimeout = null;
+            }
+
+            function speakWord(text) {
+                 if (!text) return; // Kiểm tra text trước khi đọc
+                if ('speechSynthesis' in window) {
+                     // Kiểm tra xem có đang đọc không, nếu có thì dừng lại trước
+                     if (window.speechSynthesis.speaking) {
+                          window.speechSynthesis.cancel();
+                     }
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'en-US';
+                    utterance.rate = 0.9;
+                     // Thêm xử lý lỗi nếu không tìm thấy giọng đọc
+                     utterance.onerror = (event) => {
+                          console.error('Speech synthesis error:', event.error);
+                          alert('Lỗi phát âm. Có thể giọng đọc tiếng Anh chưa được cài đặt trên trình duyệt của bạn.');
+                     };
+                    window.speechSynthesis.speak(utterance);
+                } else {
+                    alert('Trình duyệt của bạn không hỗ trợ tính năng phát âm.');
+                }
+            }
+
+            // --- THÊM LẠI HÀM API ---
+            const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+            async function callGeminiAPI(systemPrompt, userQuery, button, retries = 3, backoff = 1000) {
+                 let originalButtonContent = '';
+                if (button) {
+                     originalButtonContent = button.innerHTML;
+                    button.disabled = true;
+                    button.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
+                }
+
+                // --- START: GEMINI API CALL ---
+                // IMPORTANT: Replace with your actual API key or use a secure method to provide it.
+                // DO NOT leave the placeholder key in production.
+                const apiKey = "AIzaSyCGlgq7tNaE-mqopVatjH8gpAM0rk29xPQ"; // Đã cập nhật API Key theo xác nhận của bạn.
+                
+                // Đã xóa khối kiểm tra API Key giữ chỗ vì bạn đã xác nhận đây là key thật.
+                /*
+                if (apiKey === "AIzaSyCGlgq7tNaE-mqopVatjH8gpAM0rk29xPQ") {
+                    console.error("LỖI: Bạn chưa thay API Key của mình vào code!");
+                    alert("LỖI CẤU HÌNH: Bạn cần thay API Key của Google AI Studio vào trong code thì tính năng này mới hoạt động được. Vui lòng xem hướng dẫn trong console (F12).");
+                    if (button) {
+                       button.disabled = false;
+                       button.innerHTML = originalButtonContent;
+                    }
+                    return "Lỗi API Key.";
+                }
+                */
+
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    generationConfig: { temperature: 0.5 }
+                };
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429 && retries > 0) {
+                            console.warn(`API Rate Limit. Retrying in ${backoff}ms...`);
+                            await delay(backoff);
+                            return callGeminiAPI(systemPrompt, userQuery, button, retries - 1, backoff * 2);
+                        }
+                        if (response.status === 400) {
+                            const errorBody = await response.json();
+                            console.error("API Error 400 (Bad Request):", JSON.stringify(errorBody, null, 2));
+                            alert(`Lỗi API 400: ${errorBody?.error?.message || 'Kiểm tra lại API Key hoặc dữ liệu gửi đi.'}`);
+                        }
+                        throw new Error(`API error: ${response.status} ${response.statusText}`);
+                    }
+
+                    const result = await response.json();
+                    
+                    // Safely extract text from the response
+                    const textResult = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    
+                    if (!textResult) {
+                         console.error("Invalid API response structure:", result);
+                         throw new Error("Không có kết quả hợp lệ từ API.");
+                    }
+                    
+                    return textResult.trim();
+
+                } catch (error) {
+                    console.error("API Call Failed:", error);
+                    alert(`Lỗi gọi API: ${error.message || 'Không thể kết nối đến máy chủ AI.'}`);
+                    return "Lỗi API.";
+                } finally {
+                    if (button) {
+                        button.disabled = false;
+                        button.innerHTML = originalButtonContent;
+                    }
+                }
+                // --- END: GEMINI API CALL ---
+            }
+
+
+            // --- POMODORO TIMER LOGIC ---
+            function updateTimerDisplay() {
+                 if(timerDisplay) { // Kiểm tra element
+                    const minutes = Math.floor(timeRemaining / 60);
+                    const seconds = timeRemaining % 60;
+                    timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                 }
+            }
+
+            function startTimer() {
+                if(isTimerRunning) return;
+                isTimerRunning = true;
+                if (startPauseBtn) { // Kiểm tra element
+                    startPauseBtn.innerHTML = `<i class="fas fa-pause mr-1"></i> Tạm dừng`;
+                    startPauseBtn.classList.replace('bg-green-500', 'bg-yellow-500');
+                    startPauseBtn.classList.replace('hover:bg-green-600', 'hover:bg-yellow-600');
+                }
+
+                 clearInterval(timerInterval); // Xóa interval cũ trước khi tạo mới
+                timerInterval = setInterval(() => {
+                    timeRemaining--;
+                    updateTimerDisplay();
+                    if (timeRemaining <= 0) {
+                        clearInterval(timerInterval);
+                        timerInterval = null; // Reset
+                        isTimerRunning = false;
+                        startAlarm();
+                        if (timerAlertModal) showModal(timerAlertModal);
+                        alarmTimeout = setTimeout(() => {
+                           stopAlarm();
+                           if (timerAlertModal) hideModal(timerAlertModal);
+                        }, 60000);
+                        resetTimer();
+                    }
+                }, 1000);
+            }
+
+            function pauseTimer() {
+                isTimerRunning = false;
+                clearInterval(timerInterval);
+                timerInterval = null; // Reset
+                 if (startPauseBtn) { // Kiểm tra element
+                    startPauseBtn.innerHTML = `<i class="fas fa-play mr-1"></i> Tiếp tục`;
+                    startPauseBtn.classList.replace('bg-yellow-500', 'bg-green-500');
+                    startPauseBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-green-600');
+                 }
+            }
+
+            function resetTimer() {
+                clearInterval(timerInterval);
+                timerInterval = null; // Reset
+                isTimerRunning = false;
+                timeRemaining = initialTime;
+                updateTimerDisplay();
+                 if (startPauseBtn) { // Kiểm tra element
+                    startPauseBtn.innerHTML = `<i class="fas fa-play mr-1"></i> Bắt đầu`;
+                    if(startPauseBtn.classList.contains('bg-yellow-500')){
+                        startPauseBtn.classList.replace('bg-yellow-500', 'bg-green-500');
+                        startPauseBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-green-600');
+                    }
+                 }
+            }
+
+            function setTimer(minutes) {
+                initialTime = minutes * 60;
+                document.querySelectorAll('.set-timer-btn').forEach(btn => {
+                    btn.classList.remove('bg-indigo-200');
+                    btn.classList.add('bg-slate-200');
+                });
+                const selectedBtn = document.querySelector(`.set-timer-btn[data-minutes="${minutes}"]`);
+                if(selectedBtn) {
+                     selectedBtn.classList.remove('bg-slate-200');
+                     selectedBtn.classList.add('bg-indigo-200');
+                } else {
+                    const customBtn = document.getElementById('custom-timer-btn');
+                    if(customBtn){ // Kiểm tra element
+                         customBtn.classList.remove('bg-slate-200');
+                         customBtn.classList.add('bg-indigo-200');
+                    }
+                }
+                resetTimer();
+            }
+
+            // --- STREAK LOGIC ---
+            function renderStreak() {
+                 if (currentStreakEl && streakDisplay) { // Kiểm tra element
+                    if (state.streak && state.streak.current > 0) {
+                        currentStreakEl.textContent = state.streak.current;
+                        streakDisplay.classList.remove('hidden');
+                    } else {
+                        streakDisplay.classList.add('hidden');
+                    }
+                 }
+            }
+
+            function checkAndUpdateStreak() {
+                const today = new Date().toISOString().split('T')[0];
+                if (!state.streak) state.streak = { current: 0, lastVisit: null };
+
+                if (state.streak.lastVisit === today) return;
+
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+                if (state.streak.lastVisit === yesterdayStr) {
+                    state.streak.current = (state.streak.current || 0) + 1;
+                } else {
+                    state.streak.current = 1;
+                }
+                state.streak.lastVisit = today;
+                saveData();
+                renderStreak();
+            }
+
+
+            // --- UI RENDERING ---
+             const shuffleArray = (array) => {
+                 if (!Array.isArray(array)) return [];
+                 const shuffled = [...array]; // Tạo bản sao để không thay đổi mảng gốc
+                 for (let i = shuffled.length - 1; i > 0; i--) {
+                     const j = Math.floor(Math.random() * (i + 1));
+                     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                 }
+                 return shuffled;
+             };
+
+
+             function renderFolders() {
+                 if (!folderList) return;
+                 folderList.innerHTML = ''; // Xóa nội dung cũ trước khi render
+                 if (!Array.isArray(state.folders) || state.folders.length === 0) {
+                     folderList.innerHTML = `<p class="text-slate-500 text-center mt-4">Chưa có thư mục nào.</p>`;
+                     return;
+                 }
+                 // Sử dụng document fragment để tối ưu hiệu suất khi thêm nhiều element
+                 const fragment = document.createDocumentFragment();
+                 state.folders.forEach(folder => {
+                     if (!folder || !folder.id || typeof folder.name !== 'string') { // Kiểm tra kỹ hơn
+                          console.warn("Invalid folder data found, skipping:", folder);
+                          return;
+                     }
+                     const isActive = folder.id === state.activeFolderId;
+                     const cardCount = Array.isArray(folder.cards) ? folder.cards.length : 0;
+
+                     const el = document.createElement('div');
+                     el.className = `folder-item flex justify-between items-center p-3 rounded-lg cursor-pointer mb-2 transition ${isActive ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-slate-100'}`;
+                     // Thêm data-folder-id để dễ dàng xác định folder khi click
+                     el.dataset.folderId = folder.id;
+                     el.innerHTML = `
+                         <div class="folder-name flex-grow truncate mr-2" data-action="select">
+                             <span class="truncate"><i class="fas fa-folder mr-3 ${isActive ? 'text-indigo-500' : 'text-slate-400'}"></i>${folder.name}</span>
+                         </div>
+                         <div class="folder-actions flex items-center space-x-3 shrink-0">
+                             <span class="text-sm text-slate-500">${cardCount}</span>
+                             <button class="game-folder-btn text-slate-400 hover:text-purple-500 transition" title="Chơi game"><i class="fas fa-gamepad"></i></button>
+                             <button class="test-folder-btn text-slate-400 hover:text-indigo-500 transition" title="Thi thử"><i class="fas fa-vial"></i></button>
+                             <button class="delete-folder-btn text-slate-400 hover:text-red-500 transition" title="Xóa thư mục"><i class="fas fa-trash-alt"></i></button>
+                         </div>`;
+                     fragment.appendChild(el);
+                 });
+                 folderList.appendChild(fragment); // Thêm tất cả element một lần
+
+                  // Gán event listener cho container cha (event delegation)
+                  folderList.onclick = (e) => {
+                       const folderItem = e.target.closest('.folder-item');
+                       if (!folderItem) return; // Click vào khoảng trống
+
+                       const folderId = folderItem.dataset.folderId;
+                       if (!folderId) return; // Không có folder id
+
+                       const actionTarget = e.target.closest('button');
+
+                       if (actionTarget?.classList.contains('delete-folder-btn')) {
+                           deleteFolder(folderId);
+                       } else if (actionTarget?.classList.contains('test-folder-btn')) {
+                           startQuiz(folderId);
+                       } else if (actionTarget?.classList.contains('game-folder-btn')) {
+                           startGame(folderId);
+                       } else if (e.target.closest('[data-action="select"]')) { // Click vào tên folder
+                           selectFolder(folderId);
+                       }
+                  };
+             }
+
+
+            function renderFlashcards() {
+                try {
+                    if (!state.activeFolderId) {
+                        showView('welcome');
+                        return;
+                    }
+                    const folder = state.folders.find(f => f.id === state.activeFolderId);
+                    if (!folder) {
+                        console.error("Folder not found:", state.activeFolderId);
+                        state.activeFolderId = null;
+                        showView('welcome');
+                        return;
+                    }
+
+                    showView('flashcard');
+                    if(currentFolderName) currentFolderName.textContent = folder.name;
+
+                    const cards = Array.isArray(folder.cards) ? folder.cards : [];
+
+                    if (cards.length === 0) {
+                        if(flashcardDisplayArea) flashcardDisplayArea.style.display = 'none';
+                        if(noCardsMessage) noCardsMessage.style.display = 'block';
+                    } else {
+                        if(flashcardDisplayArea) flashcardDisplayArea.style.display = 'block';
+                        if(noCardsMessage) noCardsMessage.style.display = 'none';
+
+                        if(flashcard) flashcard.classList.remove('is-flipped');
+
+                        if (state.currentCardIndex >= cards.length || state.currentCardIndex < 0) {
+                            state.currentCardIndex = 0;
+                        }
+                        const card = cards[state.currentCardIndex];
+                        if (!card) {
+                            console.error("Card data missing at index:", state.currentCardIndex);
+                             state.currentCardIndex = 0; // Reset về 0 nếu thẻ lỗi
+                             if (cards.length > 0) renderFlashcards(); // Thử render lại thẻ đầu tiên nếu còn thẻ
+                             else showView('flashcard'); // Hiển thị 'no cards' nếu hết thẻ
+                            return;
+                        }
+
+                        if(cardFront) {
+                           cardFront.innerHTML = `
+                               <div class="relative w-full text-center">
+                                   <h2 class="text-4xl font-bold break-words">${card.english || ''}</h2>
+                                   ${card.partOfSpeech ? `<div class="part-of-speech">${card.partOfSpeech}</div>` : ''}
+                                   ${card.phonetic ? `<p class="phonetic-text">/${card.phonetic}/</p>` : ''}
+                                   <button class="speak-btn absolute text-slate-400 hover:text-indigo-600 transition p-4" data-word="${card.english || ''}">
+                                       <i class="fas fa-volume-high fa-lg"></i>
+                                   </button>
+                               </div>
+                           `;
+                        }
+                        if(cardBack) {
+                           cardBack.innerHTML = `
+                               <div>
+                                   <h3 class="text-2xl font-bold break-words">${card.vietnamese || ''}</h3>
+                                   ${card.example ? `<p class="example-text break-words">"${card.example}"</p>` : ''}
+                               </div>
+                           `;
+                        }
+                        updateCardControls(cards.length);
+                    }
+                } catch (error) {
+                    console.error("Error rendering flashcards:", error);
+                     showView('welcome');
+                     alert("Đã xảy ra lỗi khi hiển thị thẻ. Vui lòng thử lại.");
+                }
+            }
+
+
+            const updateCardControls = (total) => {
+                const disableButtons = total <= 1;
+                 if (prevCardBtn) prevCardBtn.disabled = disableButtons;
+                 if (nextCardBtn) nextCardBtn.disabled = disableButtons;
+                 if (cardCounter) cardCounter.textContent = total > 0 ? `${state.currentCardIndex + 1} / ${total}` : '0 / 0';
+            };
+
+
+            const showView = (viewName) => {
+                const allViews = [welcomeScreen, flashcardView, quizView, resultsView, gameView].filter(Boolean);
+                allViews.forEach(v => v.style.display = 'none');
+
+                const views = {
+                    welcome: welcomeScreen,
+                    flashcard: flashcardView,
+                    quiz: quizView,
+                    results: resultsView,
+                    game: gameView,
+                };
+                 const targetView = views[viewName];
+                if (targetView) {
+                    targetView.style.display = (viewName === 'welcome') ? 'block' : 'flex';
+                } else {
+                     console.error("View element not found:", viewName);
+                     if(welcomeScreen) welcomeScreen.style.display = 'block';
+                }
+            };
+
+
+            const showModal = (modal) => {
+                 if(modal) modal.classList.remove('hidden');
+            }
+            const hideModal = (modal) => {
+                 if(modal) modal.classList.add('hidden');
+            }
+             // Event delegation cho nút cancel trong modal
+             document.body.addEventListener('click', (e) => {
+                  if (e.target.classList.contains('modal-cancel-btn')) {
+                       const modal = e.target.closest('.fixed');
+                       if (modal) hideModal(modal);
+                  }
+             });
+
+
+            function showConfirmModal(message, onConfirm, title = "Xác nhận", okText = "OK") {
+                 const titleEl = document.getElementById('confirm-title');
+                 const msgEl = document.getElementById('confirm-message');
+                 const okBtn = document.getElementById('confirm-ok-btn');
+                 const cancelBtn = document.getElementById('confirm-cancel-btn');
+                 const confirmModalEl = document.getElementById('confirm-modal');
+
+                 if (!titleEl || !msgEl || !okBtn || !cancelBtn || !confirmModalEl) {
+                      console.error("Confirm modal elements missing.");
+                      if (confirm(message)) { onConfirm(); } // Fallback
+                      return;
+                 }
+
+
+                titleEl.textContent = title;
+                msgEl.textContent = message;
+
+                // Cập nhật nút OK
+                 const newOkBtn = okBtn.cloneNode(false); // Clone không cần children
+                 newOkBtn.textContent = okText; // Đặt text mới
+                 // Sao chép classes cũ và thêm/xóa class màu
+                 newOkBtn.className = okBtn.className;
+                 newOkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'bg-indigo-600', 'hover:bg-indigo-700');
+                 if(okText === "Xóa" || okText === "Thoát") { // Thêm cả Thoát
+                     newOkBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+                 } else {
+                     newOkBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                 }
+                newOkBtn.addEventListener('click', () => { onConfirm(); hideModal(confirmModalEl); }, { once: true }); // Dùng once để tự gỡ listener
+                okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+
+                 // Gán lại listener cho nút Cancel (không cần clone)
+                 cancelBtn.onclick = () => hideModal(confirmModalEl);
+
+                showModal(confirmModalEl);
+            }
+
+
+            // --- FOLDER & CARD LOGIC ---
+            function selectFolder(folderId) {
+                 if (!state.folders.some(f => f.id === folderId)) {
+                      console.warn("Invalid folder selection:", folderId);
+                      state.activeFolderId = null;
+                      renderFolders(); // Render lại list
+                      showView('welcome');
+                      return;
+                 }
+                state.activeFolderId = folderId;
+                state.currentCardIndex = 0;
+                checkAndUpdateStreak();
+                saveData();
+                renderFolders(); // Render lại list để highlight folder mới
+                renderFlashcards(); // Render thẻ của folder mới
+            }
+
+            addFolderBtn?.addEventListener('click', () => {
+                if(newFolderNameInput) newFolderNameInput.value = '';
+                if(addFolderModal) showModal(addFolderModal);
+                if(newFolderNameInput) newFolderNameInput.focus();
+            });
+
+            confirmAddFolderBtn?.addEventListener('click', () => {
+                 const name = newFolderNameInput?.value.trim();
+                if (!name) return;
+                const newFolder = { id: Date.now().toString(), name, cards: [] };
+                if (!Array.isArray(state.folders)) state.folders = [];
+                state.folders.push(newFolder);
+                 // Không select ngay, để người dùng tự click
+                saveData();
+                renderFolders(); // Chỉ render lại folder list
+                if(addFolderModal) hideModal(addFolderModal);
+            });
+
+
+            function deleteFolder(folderId) {
+                showConfirmModal('Bạn có chắc muốn xóa thư mục này và tất cả thẻ bên trong?', () => {
+                    state.folders = Array.isArray(state.folders) ? state.folders.filter(f => f && f.id !== folderId) : [];
+                    if (state.activeFolderId === folderId) {
+                        state.activeFolderId = null;
+                        state.currentCardIndex = 0;
+                        showView('welcome'); // Chuyển về welcome nếu xóa folder đang active
+                    } else {
+                         renderFlashcards(); // Render lại view hiện tại (nếu đang xem folder khác)
+                    }
+                    saveData();
+                    renderFolders(); // Render lại list folder
+                }, "Xác nhận Xóa", "Xóa");
+            }
+
+
+            addCardToFolderBtn?.addEventListener('click', () => {
+                 if(englishWordInput) englishWordInput.value = '';
+                 if(phoneticInput) phoneticInput.value = '';
+                 if(partOfSpeechInput) partOfSpeechInput.value = '';
+                 if(vietnameseMeaningInput) vietnameseMeaningInput.value = '';
+                 if(exampleSentenceInput) exampleSentenceInput.value = '';
+                 if(addCardModal) showModal(addCardModal);
+                 if(englishWordInput) englishWordInput.focus();
+            });
+
+
+            confirmAddCardBtn?.addEventListener('click', () => {
+                 const english = englishWordInput?.value.trim();
+                 const vietnamese = vietnameseMeaningInput?.value.trim();
+                if (!english || !vietnamese || !state.activeFolderId) return;
+
+                const folder = state.folders.find(f => f.id === state.activeFolderId);
+                if (!folder) return;
+                 if (!Array.isArray(folder.cards)) folder.cards = [];
+
+                folder.cards.push({
+                    id: Date.now().toString(),
+                    english,
+                    phonetic: phoneticInput?.value.trim() || '',
+                    partOfSpeech: partOfSpeechInput?.value.trim() || '',
+                    vietnamese,
+                    example: exampleSentenceInput?.value.trim() || ''
+                });
+                state.currentCardIndex = folder.cards.length - 1;
+                saveData();
+                renderFolders();
+                renderFlashcards();
+                if(addCardModal) hideModal(addCardModal);
+            });
+
+
+            function deleteCurrentCard() {
+                const folder = state.folders.find(f => f.id === state.activeFolderId);
+                 if (!folder || !Array.isArray(folder.cards) || folder.cards.length === 0) return;
+                 if (state.currentCardIndex < 0 || state.currentCardIndex >= folder.cards.length) return;
+
+                 const cardToDelete = folder.cards[state.currentCardIndex];
+                 const cardName = cardToDelete?.english || 'thẻ này';
+
+                showConfirmModal(`Bạn có chắc muốn xóa thẻ "${cardName}"?`, () => {
+                     const currentFolder = state.folders.find(f => f.id === state.activeFolderId); // Lấy lại folder state mới nhất
+                     if (!currentFolder || !Array.isArray(currentFolder.cards) || state.currentCardIndex < 0 || state.currentCardIndex >= currentFolder.cards.length) return;
+
+                    currentFolder.cards.splice(state.currentCardIndex, 1);
+
+                    // Logic điều chỉnh index phức tạp hơn, cần chính xác
+                     const remainingCards = currentFolder.cards.length;
+                     if (remainingCards === 0) {
+                          state.currentCardIndex = 0; // Reset về 0 nếu hết thẻ
+                     } else if (state.currentCardIndex >= remainingCards) {
+                          // Nếu xóa thẻ cuối cùng, index mới là thẻ cuối cùng còn lại
+                          state.currentCardIndex = remainingCards - 1;
+                     }
+                     // Trường hợp xóa thẻ ở giữa, index hiện tại sẽ trỏ vào thẻ tiếp theo (đúng)
+                     // Không cần làm gì thêm ở đây
+
+                    saveData();
+                    renderFolders();
+                    renderFlashcards(); // Render lại thẻ ở index mới (hoặc màn hình trống)
+                }, "Xác nhận Xóa", "Xóa");
+            }
+
+
+            function openEditModal() {
+                 const folder = state.folders.find(f => f.id === state.activeFolderId);
+                 if (!folder || !Array.isArray(folder.cards) || folder.cards.length === 0) return;
+                 if (state.currentCardIndex < 0 || state.currentCardIndex >= folder.cards.length) {
+                      state.currentCardIndex = 0;
+                 }
+                const card = folder.cards[state.currentCardIndex];
+                if (!card) return;
+
+                 if (!editCardIdInput || !editEnglishWordInput || !editPhoneticInput || !editPartOfSpeechInput || !editVietnameseMeaningInput || !editExampleSentenceInput || !editCardModal) return;
+
+                editCardIdInput.value = card.id || '';
+                editEnglishWordInput.value = card.english || '';
+                editPhoneticInput.value = card.phonetic || '';
+                editPartOfSpeechInput.value = card.partOfSpeech || '';
+                editVietnameseMeaningInput.value = card.vietnamese || '';
+                editExampleSentenceInput.value = card.example || '';
+
+                showModal(editCardModal);
+            }
+
+
+            function handleEditFormSubmit(e) {
+                 if (e) e.preventDefault();
+                 if (!editCardIdInput) return;
+
+                const cardId = editCardIdInput.value;
+                const folder = state.folders.find(f => f.id === state.activeFolderId);
+                if (!folder || !Array.isArray(folder.cards)) return;
+                const cardIndex = folder.cards.findIndex(c => c && c.id === cardId);
+                if (cardIndex === -1) return;
+
+                 if (!editEnglishWordInput || !editPhoneticInput || !editPartOfSpeechInput || !editVietnameseMeaningInput || !editExampleSentenceInput || !editCardModal) return;
+
+                folder.cards[cardIndex] = {
+                    ...folder.cards[cardIndex],
+                    english: editEnglishWordInput.value.trim(),
+                    phonetic: editPhoneticInput.value.trim(),
+                    partOfSpeech: editPartOfSpeechInput.value.trim(),
+                    vietnamese: editVietnameseMeaningInput.value.trim(),
+                    example: editExampleSentenceInput.value.trim()
+                };
+
+                saveData();
+                hideModal(editCardModal);
+                renderFlashcards(); // Render lại thẻ hiện tại với nội dung mới
+            }
+
+
+            // --- IMPORT LOGIC (Paste) ---
+             importCardsBtn?.addEventListener('click', () => {
+                 if(pasteDataInput) pasteDataInput.value = '';
+                 if(importProgress) importProgress.textContent = '';
+                 if(importCardsModal) showModal(importCardsModal);
+             });
+
+
+             confirmImportBtn?.addEventListener('click', () => {
+                 const data = pasteDataInput?.value.trim();
+                 if (!data || !state.activeFolderId) return;
+
+                 const folder = state.folders.find(f => f.id === state.activeFolderId);
+                 if (!folder) return;
+                  if (!Array.isArray(folder.cards)) folder.cards = [];
+
+                 const rows = data.split('\n').filter(row => row.trim() !== '');
+                 let importedCount = 0;
+
+                 rows.forEach((row, index) => {
+                     const cols = row.split('\t');
+                     const english = (cols[0] || '').trim();
+                     const partOfSpeech = (cols[1] || '').trim();
+                     const phonetic = (cols[2] || '').trim();
+                     const vietnamese = (cols[3] || '').trim();
+                     const example = (cols[4] || '').trim();
+
+                     if (english && vietnamese) {
+                         folder.cards.push({
+                             id: `${Date.now()}-${index}`,
+                             english,
+                             partOfSpeech,
+                             phonetic,
+                             vietnamese,
+                             example
+                         });
+                         importedCount++;
+                     } else {
+                          console.warn("Skipping invalid row during import (missing English or Vietnamese):", row);
+                     }
+                 });
+
+                  if (importProgress) {
+                     if (importedCount > 0) {
+                         importProgress.textContent = `Đã nhập thành công ${importedCount} thẻ!`;
+                         state.currentCardIndex = Math.max(0, folder.cards.length - 1);
+                         saveData();
+                         renderFolders();
+                         renderFlashcards();
+                         setTimeout(() => {
+                              if(importCardsModal) hideModal(importCardsModal);
+                         }, 500);
+                     } else {
+                         importProgress.textContent = 'Không tìm thấy dữ liệu hợp lệ. (Cần "Từ vựng" và "Nghĩa")';
+                     }
+                  }
+             });
+
+
+            // --- QUIZ LOGIC --- (Đã thêm kiểm tra lỗi)
+            // --- GAME LOGIC --- (Đã thêm kiểm tra lỗi)
+             function startQuiz(folderId) {
+                 const folder = state.folders.find(f => f.id === folderId);
+                  if (!folder || !Array.isArray(folder.cards) || folder.cards.length < 3) {
+                     alert("Bạn cần ít nhất 3 thẻ trong thư mục để bắt đầu bài thi.");
+                     return;
+                 }
+                 if (isTimerRunning) pauseTimer();
+                 checkAndUpdateStreak();
+
+                 state.quiz = {
+                     isActive: true,
+                     folderId,
+                     questions: [],
+                     currentQuestionIndex: 0,
+                     score: 0,
+                     incorrectAnswers: [],
+                     timer: null,
+                     timeRemaining: 0
+                 };
+
+                 const allMeanings = folder.cards.map(c => c?.vietnamese).filter(Boolean); // Lọc an toàn
+                 const validCards = folder.cards.filter(card => card && card.vietnamese);
+                 if (validCards.length < 3) {
+                      alert("Cần ít nhất 3 thẻ có nghĩa Tiếng Việt để bắt đầu bài thi.");
+                      return;
+                  }
+
+                 state.quiz.questions = validCards.map(card => {
+                     const correctAnswer = card.vietnamese;
+                     // Lọc distractors an toàn hơn
+                     const distractors = allMeanings.filter(m => m && m !== correctAnswer);
+                     const shuffledDistractors = shuffleArray(distractors);
+
+                     const finalDistractors = [];
+                     for (let d of shuffledDistractors) {
+                         if (finalDistractors.length < 2 && !finalDistractors.includes(d)) {
+                             finalDistractors.push(d);
+                         }
+                         if (finalDistractors.length === 2) break;
+                     }
+                     while (finalDistractors.length < 2) {
+                          // Chỉ thêm correctAnswer nếu thực sự không còn lựa chọn nào khác
+                          if (!finalDistractors.includes(correctAnswer)) {
+                               finalDistractors.push(correctAnswer);
+                          } else {
+                               // Nếu chỉ có 1 từ duy nhất trong folder, dùng placeholder
+                               finalDistractors.push(`Nghĩa khác ${finalDistractors.length + 1}`);
+                          }
+                     }
+
+
+                     const options = shuffleArray([correctAnswer, ...finalDistractors]);
+                     return { ...card, options };
+                 });
+                 state.quiz.questions = shuffleArray(state.quiz.questions); // Xáo trộn câu hỏi
+
+                 state.quiz.timeRemaining = state.quiz.questions.length * 30;
+                  clearInterval(state.quiz.timer);
+                 state.quiz.timer = setInterval(updateQuizTimer, 1000);
+
+                 renderCurrentQuestion();
+                 showView('quiz');
+             }
+
+             function exitQuiz() {
+                 clearInterval(state.quiz?.timer); // Optional chaining
+                 if (state.quiz) {
+                      state.quiz.timer = null;
+                      state.quiz.isActive = false;
+                 }
+                 showView('flashcard');
+                 if (!isTimerRunning && startPauseBtn?.innerText.includes("Tiếp tục")) startTimer(); // Optional chaining
+             }
+
+             function updateQuizTimer() {
+                 if (!state.quiz?.isActive) { // Optional chaining
+                     clearInterval(state.quiz?.timer);
+                     if (state.quiz) state.quiz.timer = null;
+                     return;
+                 }
+
+                 state.quiz.timeRemaining--;
+                 const minutes = Math.floor(state.quiz.timeRemaining / 60);
+                 const seconds = state.quiz.timeRemaining % 60;
+                  if(quizTimerEl) {
+                     quizTimerEl.innerHTML = `<i class="far fa-clock"></i> ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                  }
+
+
+                 if (state.quiz.timeRemaining <= 0 && state.quiz.isActive) {
+                     clearInterval(state.quiz.timer);
+                     if (state.quiz) state.quiz.timer = null;
+                     alert("Hết giờ làm bài!");
+                     showResults();
+                 }
+             }
+
+             function renderCurrentQuestion() {
+                 try {
+                      if (!state.quiz || !state.quiz.questions) throw new Error("Quiz state is invalid"); // Kiểm tra state quiz
+                     const { questions, currentQuestionIndex } = state.quiz;
+                      if(currentQuestionIndex < 0 || currentQuestionIndex >= questions.length) {
+                           throw new Error(`Invalid quiz index: ${currentQuestionIndex}`);
+                      }
+                     const questionData = questions[currentQuestionIndex];
+                      if (!questionData) throw new Error(`Missing question data at index: ${currentQuestionIndex}`);
+
+                      if(quizProgress) quizProgress.textContent = `Câu ${currentQuestionIndex + 1} / ${questions.length}`;
+                      if(quizProgressBar) quizProgressBar.style.width = `${((currentQuestionIndex + 1) / questions.length) * 100}%`;
+                      if(quizQuestion) quizQuestion.textContent = questionData.english || '';
+                      if(quizOptions) {
+                           quizOptions.innerHTML = ''; // Xóa options cũ
+                           if (Array.isArray(questionData.options)) {
+                                questionData.options.forEach(option => {
+                                     const button = document.createElement('button');
+                                     button.textContent = option || '';
+                                     button.className = "answer-option w-full p-4 border-2 border-slate-300 rounded-lg font-semibold text-left hover:bg-slate-100";
+                                     button.onclick = () => handleAnswerSelection(button, option, questionData.vietnamese);
+                                     quizOptions.appendChild(button);
+                                });
+                           } else {
+                               console.error("Quiz options missing or not array:", questionData);
+                           }
+                      }
+                      if(nextQuestionBtn) nextQuestionBtn.style.display = 'none';
+                 } catch (error) {
+                     console.error("Error rendering quiz question:", error);
+                     showResults(); // Chuyển sang kết quả nếu có lỗi
+                 }
+             }
+
+
+             function handleAnswerSelection(button, selectedAnswer, correctAnswer) {
+                  if (!quizOptions) return; // Kiểm tra element
+                 Array.from(quizOptions.children).forEach(btn => {
+                      if (btn instanceof HTMLButtonElement) btn.disabled = true; // Kiểm tra type
+                 });
+                 if (selectedAnswer === correctAnswer) {
+                     button.classList.add('correct');
+                      if (state.quiz) state.quiz.score = (state.quiz.score || 0) + 1; // Khởi tạo nếu chưa có
+                 } else {
+                     button.classList.add('incorrect');
+                      const currentQuestion = state.quiz?.questions?.[state.quiz.currentQuestionIndex];
+                      if (currentQuestion) {
+                           if (!Array.isArray(state.quiz.incorrectAnswers)) state.quiz.incorrectAnswers = []; // Đảm bảo là mảng
+                           state.quiz.incorrectAnswers.push(currentQuestion);
+                      }
+                     Array.from(quizOptions.children).forEach(btn => {
+                         if (btn.textContent === correctAnswer) btn.classList.add('correct');
+                     });
+                 }
+                 if(nextQuestionBtn) nextQuestionBtn.style.display = 'inline-block'; // Kiểm tra element
+             }
+
+
+             function showResults() {
+                 clearInterval(state.quiz?.timer);
+                 if (state.quiz) {
+                      state.quiz.timer = null;
+                      state.quiz.isActive = false;
+                 }
+                 if (!isTimerRunning && startPauseBtn?.innerText.includes("Tiếp tục")) startTimer();
+
+                  // Kiểm tra các element cần thiết
+                  if (!finalScore || !scoreMessage || !incorrectAnswersSection || !incorrectAnswersList) {
+                       console.error("Result view elements missing.");
+                       showView('flashcard'); // Quay về flashcard nếu view lỗi
+                       return;
+                  }
+
+                 const { score = 0, questions = [], incorrectAnswers = [] } = state.quiz || {}; // Default nếu quiz state lỗi
+                  const totalQuestions = questions.length;
+
+                  if (totalQuestions === 0) {
+                      finalScore.textContent = "0 / 0";
+                      scoreMessage.textContent = "Không có câu hỏi nào để hiển thị kết quả.";
+                      incorrectAnswersSection.style.display = 'none';
+                      showView('results');
+                      return;
+                  }
+
+
+                 finalScore.textContent = `${score} / ${totalQuestions}`;
+                 const percentage = totalQuestions > 0 ? (score / totalQuestions) * 100 : 0;
+                 if (percentage === 100) scoreMessage.textContent = "Tuyệt vời! Bạn đã nhớ tất cả các từ.";
+                 else if (percentage >= 70) scoreMessage.textContent = "Làm tốt lắm! Cố gắng thêm chút nữa nhé.";
+                 else scoreMessage.textContent = "Không sao cả, hãy ôn tập và thử lại nhé!";
+
+                  const validIncorrectAnswers = incorrectAnswers.filter(card => card && card.english && card.vietnamese);
+
+                 if (validIncorrectAnswers.length > 0) {
+                     incorrectAnswersSection.style.display = 'block';
+                     // Render danh sách an toàn
+                     try {
+                          incorrectAnswersList.innerHTML = validIncorrectAnswers
+                               .map(card => `<li><span class="font-bold">${card.english || '?'}</span>: ${card.vietnamese || '?'}</li>`) // Thêm default
+                               .join('');
+                     } catch(e) {
+                          console.error("Error rendering incorrect answers list:", e);
+                          incorrectAnswersList.innerHTML = '<li>Lỗi hiển thị danh sách từ sai.</li>';
+                     }
+                 } else {
+                     incorrectAnswersSection.style.display = 'none';
+                 }
+                 showView('results');
+             }
+
+
+
+             function startGame(folderId) {
+                  const folder = state.folders?.find(f => f.id === folderId); // Optional chaining
+                  if (!folder || !Array.isArray(folder.cards) || folder.cards.length < 6) {
+                      alert("Bạn cần ít nhất 6 thẻ trong thư mục để chơi game.");
+                      return;
+                  }
+                  const validGameCards = folder.cards.filter(card => card && card.english && card.vietnamese);
+                  if (validGameCards.length < 6) {
+                       alert("Cần ít nhất 6 thẻ hợp lệ (có cả Từ vựng và Nghĩa) để chơi game.");
+                       return;
+                  }
+
+                 if (isTimerRunning) pauseTimer();
+                 checkAndUpdateStreak();
+
+                 let gameCards = shuffleArray([...validGameCards]).slice(0, 6);
+                 let board = [];
+                 gameCards.forEach((card, index) => {
+                     const pairId = `pair-${index}`;
+                     board.push({ card, type: 'word', pairId });
+                     board.push({ card, type: 'meaning', pairId });
+                 });
+
+                 state.game = {
+                     isActive: true,
+                     folderId,
+                     board: shuffleArray(board),
+                     selectedTile: null,
+                     lives: 3,
+                     score: 0,
+                     matchesLeft: 6,
+                     timer: null,
+                     timeRemaining: 90
+                 };
+
+                 renderGameBoard();
+                 updateGameLives();
+                 clearInterval(state.game.timer);
+                 state.game.timer = setInterval(updateGameTimer, 1000);
+                 updateGameTimer();
+                 showView('game');
+             }
+
+             function renderGameBoard() {
+                  if (!gameBoard) return; // Kiểm tra element
+                 gameBoard.innerHTML = '';
+                  if(!Array.isArray(state.game?.board)) { // Optional chaining
+                       console.error("Game board is not an array");
+                       exitGame();
+                       return;
+                  }
+                 state.game.board.forEach((data, index) => {
+                      if(!data || !data.card) {
+                           console.warn("Invalid game tile data at index:", index);
+                           return;
+                      }
+                     const tile = document.createElement('div');
+                     tile.className = 'game-tile';
+                     tile.dataset.index = index;
+
+                     if (data.type === 'word') {
+                         tile.classList.add('type-word');
+                         tile.innerHTML = `<span>${data.card.english || ''}</span><span class="tile-pos">${data.card.partOfSpeech || ''}</span>`;
+                     } else {
+                         tile.classList.add('type-meaning');
+                         tile.textContent = data.card.vietnamese || '';
+                     }
+                     gameBoard.appendChild(tile);
+                 });
+             }
+
+              function handleTileClick(e) {
+                  try {
+                      const tile = e.target.closest('.game-tile');
+                      if (!tile || !state.game?.isActive || tile.classList.contains('is-matched')) return; // Optional chaining
+
+                      const dataIndex = parseInt(tile.dataset.index, 10);
+                       if (isNaN(dataIndex) || dataIndex < 0 || !state.game?.board || dataIndex >= state.game.board.length) { // Optional chaining
+                            console.error("Invalid tile index:", tile.dataset.index);
+                            return;
+                       }
+                      const tileData = state.game.board[dataIndex];
+                       if (!tileData) {
+                            console.error("Tile data missing:", dataIndex);
+                            return;
+                       }
+
+                      if (!state.game.selectedTile) {
+                          if (tile.classList.contains('is-selected')) return;
+                          tile.classList.add('is-selected');
+                          state.game.selectedTile = { element: tile, data: tileData };
+                      } else {
+                           if (!state.game.selectedTile || !state.game.selectedTile.data) {
+                                console.error("Invalid selected tile state.");
+                                state.game.selectedTile = null;
+                                return;
+                           }
+                          if (state.game.selectedTile.element === tile) {
+                              tile.classList.remove('is-selected');
+                              state.game.selectedTile = null;
+                              return;
+                          }
+
+                          if (state.game.selectedTile.data.type === tileData.type) {
+                              state.game.selectedTile.element.classList.remove('is-selected');
+                              tile.classList.add('is-selected');
+                              state.game.selectedTile = { element: tile, data: tileData };
+                              return;
+                          }
+
+                          if (state.game.selectedTile.data.pairId === tileData.pairId) {
+                              // Match
+                              if (state.game.selectedTile.element) {
+                                   state.game.selectedTile.element.classList.remove('is-selected');
+                                   state.game.selectedTile.element.classList.add('is-matched');
+                              }
+                              tile.classList.add('is-matched');
+
+                              state.game.selectedTile = null;
+                              state.game.matchesLeft--;
+                              state.game.score += 100;
+
+                              if (state.game.matchesLeft <= 0) {
+                                  showGameOver(true);
+                              }
+                          } else {
+                              // No Match
+                              state.game.lives--;
+                              updateGameLives();
+
+                              tile.classList.add('is-incorrect');
+                              if (state.game.selectedTile.element) {
+                                   state.game.selectedTile.element.classList.add('is-incorrect');
+                              }
+
+                              const selectedElement = state.game.selectedTile?.element;
+                              state.game.selectedTile = null;
+
+                              setTimeout(() => {
+                                   if (document.body.contains(tile)) {
+                                        tile.classList.remove('is-incorrect');
+                                   }
+                                  if (selectedElement && document.body.contains(selectedElement)) {
+                                      selectedElement.classList.remove('is-incorrect');
+                                      selectedElement.classList.remove('is-selected');
+                                  }
+                                  // Kiểm tra state.game tồn tại trước khi truy cập isActive
+                                  if (state.game?.isActive && state.game.lives <= 0) {
+                                      showGameOver(false);
+                                  }
+                              }, 500);
+                          }
+                      }
+                  } catch (error) {
+                      console.error("Error handling tile click:", error);
+                       exitGame(); // Thoát game nếu có lỗi nghiêm trọng
+                  }
+              }
+
+
+             function updateGameLives() {
+                  if (gameLives) {
+                     gameLives.innerHTML = '';
+                     for (let i = 0; i < 3; i++) {
+                         gameLives.innerHTML += `<i class="fas fa-heart ${i < (state.game?.lives ?? 0) ? 'text-red-500' : 'text-slate-300'}"></i>`; // Nullish coalescing
+                     }
+                  }
+             }
+
+             function updateGameTimer() {
+                 if (!state.game?.isActive) { // Optional chaining
+                     clearInterval(state.game?.timer); // Optional chaining
+                     if (state.game) state.game.timer = null;
+                     return;
+                 }
+
+                 state.game.timeRemaining--;
+                 const minutes = Math.floor(state.game.timeRemaining / 60);
+                 const seconds = state.game.timeRemaining % 60;
+                 if (gameTimerEl) {
+                    gameTimerEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                 }
+
+
+                 if (state.game.timeRemaining <= 0 && state.game.isActive) {
+                     showGameOver(false);
+                 }
+             }
+
+
+             function showGameOver(isWin) {
+                  if (!state.game) return; // Kiểm tra state game tồn tại
+                 state.game.isActive = false;
+                 clearInterval(state.game.timer);
+                 state.game.timer = null;
+
+                 if (!isTimerRunning && startPauseBtn?.innerText.includes("Tiếp tục")) { // Optional chaining
+                     startTimer();
+                 }
+
+                  if (!gameOverModal) return;
+
+
+                 if (isWin) {
+                      if(gameOverIcon) gameOverIcon.className = "fas fa-trophy text-5xl text-yellow-400 mb-4";
+                      if(gameOverTitle) gameOverTitle.textContent = "Thắng!";
+                      if(gameOverMessage) gameOverMessage.textContent = "Bạn đã nối đúng tất cả các từ.";
+                      // Kiểm tra timeRemaining trước khi cộng điểm
+                      state.game.score += (state.game.timeRemaining > 0 ? state.game.timeRemaining : 0);
+                 } else {
+                      if(gameOverIcon) gameOverIcon.className = "fas fa-skull-crossbones text-5xl text-slate-500 mb-4";
+                      if(gameOverTitle) gameOverTitle.textContent = "Thua!";
+                      if(gameOverMessage) {
+                           if (state.game.lives <= 0) {
+                                gameOverMessage.textContent = "Bạn đã hết mạng.";
+                           } else if (state.game.timeRemaining <= 0) {
+                                gameOverMessage.textContent = "Hết giờ!";
+                           } else {
+                                gameOverMessage.textContent = "Bạn đã thoát game.";
+                                if(gameFinalScore) gameFinalScore.textContent = '';
+                                showModal(gameOverModal);
+                                return;
+                           }
+                      }
+                 }
+                  if(gameFinalScore) gameFinalScore.textContent = `Điểm: ${state.game.score || 0}`; // Default score
+                 showModal(gameOverModal);
+             }
+
+
+             function exitGame() {
+                  if (state.game) { // Kiểm tra state game tồn tại
+                     state.game.isActive = false;
+                     clearInterval(state.game.timer);
+                     state.game.timer = null;
+                  }
+
+                 hideModal(gameOverModal);
+                 showView('flashcard');
+                 if (!isTimerRunning && startPauseBtn?.innerText.includes("Tiếp tục")) { // Optional chaining
+                     startTimer();
+                 }
+             }
+
+
+             function playAgain() {
+                 hideModal(gameOverModal);
+                  if (state.game?.folderId && state.folders.some(f => f?.id === state.game.folderId)) { // Optional chaining
+                       startGame(state.game.folderId);
+                  } else {
+                       console.error("Cannot restart game: Invalid or missing folderId");
+                       showView('flashcard');
+                  }
+             }
+
+
+            // --- EVENT LISTENERS ---
+            startPauseBtn?.addEventListener('click', () => {
+                if (isTimerRunning) pauseTimer();
+                else startTimer();
+            });
+            resetBtn?.addEventListener('click', resetTimer);
+            document.querySelectorAll('.set-timer-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                     const minutes = parseInt(btn.dataset.minutes);
+                     if (!isNaN(minutes)) setTimer(minutes); // Kiểm tra parse hợp lệ
+                });
+            });
+            customTimerBtn?.addEventListener('click', () => {
+                if(customTimerModal) showModal(customTimerModal); // Kiểm tra element
+            });
+            confirmCustomTimerBtn?.addEventListener('click', () => {
+                const minutes = parseInt(customMinutesInput?.value, 10);
+                if (!isNaN(minutes) && minutes > 0 && minutes <= 180) {
+                    setTimer(minutes);
+                    if(customTimerModal) hideModal(customTimerModal); // Kiểm tra element
+                } else {
+                    alert("Vui lòng nhập một số hợp lệ từ 1 đến 180.");
+                }
+            });
+
+            // --- AI Feature Listeners ---
+            translateBtn?.addEventListener('click', async () => {
+                const word = englishWordInput.value.trim();
+                if (!word) return;
+                const systemPrompt = "Translate the given English word into a concise Vietnamese meaning. Only return the Vietnamese translation.";
+                const result = await callGeminiAPI(systemPrompt, word, translateBtn);
+                if (result && result !== "Lỗi API.") {
+                    vietnameseMeaningInput.value = result;
+                }
+            });
+
+            getPhoneticBtn?.addEventListener('click', async () => {
+                const word = englishWordInput.value.trim();
+                if (!word) return;
+                const systemPrompt = "Provide the IPA (International Phonetic Alphabet) transcription for the given English word. Only return the IPA string, without slashes (e.g., həˈloʊ).";
+                const result = await callGeminiAPI(systemPrompt, word, getPhoneticBtn);
+                if (result && result !== "Lỗi API.") {
+                    phoneticInput.value = result;
+                }
+            });
+
+            getPosBtn?.addEventListener('click', async () => {
+                const word = englishWordInput.value.trim();
+                if (!word) return;
+                const systemPrompt = "Provide the most common part of speech for the given English word (e.g., n, v, adj, adv). Return only the abbreviation.";
+                const result = await callGeminiAPI(systemPrompt, word, getPosBtn);
+                if (result && result !== "Lỗi API.") {
+                    partOfSpeechInput.value = result;
+                }
+            });
+
+            generateExampleBtn?.addEventListener('click', async () => {
+                const word = englishWordInput.value.trim();
+                if (!word) return;
+                const systemPrompt = "Create a simple and clear example sentence using the given English word. Only return the example sentence.";
+                const result = await callGeminiAPI(systemPrompt, word, generateExampleBtn);
+                if (result && result !== "Lỗi API.") {
+                    exampleSentenceInput.value = result.replace(/"/g, ''); // Xóa dấu ngoặc kép nếu có
+                }
+            });
+
+            flashcardDisplayArea?.addEventListener('click', (e) => {
+                const speakBtn = e.target.closest('.speak-btn');
+                if (speakBtn) {
+                    e.stopPropagation();
+                    const wordToSpeak = speakBtn.dataset.word;
+                    if (wordToSpeak) speakWord(wordToSpeak);
+                    return;
+                }
+            });
+
+
+            flipCardBtn?.addEventListener('click', () => flashcard?.classList.toggle('is-flipped'));
+            prevCardBtn?.addEventListener('click', () => {
+                 if (!state.activeFolderId) return;
+                const folder = state.folders.find(f => f.id === state.activeFolderId);
+                if (folder && Array.isArray(folder.cards) && folder.cards.length > 0) { // Kiểm tra cards là mảng
+                    state.currentCardIndex = (state.currentCardIndex - 1 + folder.cards.length) % folder.cards.length;
+                    renderFlashcards();
+                }
+            });
+            nextCardBtn?.addEventListener('click', () => {
+                 if (!state.activeFolderId) return;
+                const folder = state.folders.find(f => f.id === state.activeFolderId);
+                 if (folder && Array.isArray(folder.cards) && folder.cards.length > 0) { // Kiểm tra cards là mảng
+                    state.currentCardIndex = (state.currentCardIndex + 1) % folder.cards.length;
+                    renderFlashcards();
+                }
+            });
+            deleteCardBtn?.addEventListener('click', deleteCurrentCard);
+            editCardBtn?.addEventListener('click', openEditModal);
+            editCardForm?.addEventListener('submit', handleEditFormSubmit);
+
+            exitQuizBtn?.addEventListener('click', () => {
+                showConfirmModal("Bạn có chắc muốn thoát bài thi? Tiến trình sẽ không được lưu.", () => {
+                    exitQuiz();
+                }, "Xác nhận Thoát", "Thoát");
+            });
+            nextQuestionBtn?.addEventListener('click', () => {
+                 if (state.quiz?.isActive) { // Optional chaining
+                      state.quiz.currentQuestionIndex++;
+                      if (state.quiz.currentQuestionIndex < state.quiz.questions.length) {
+                           renderCurrentQuestion();
+                      } else {
+                           showResults();
+                      }
+                 }
+            });
+            backToFoldersBtn?.addEventListener('click', () => {
+                clearInterval(state.quiz?.timer);
+                if(state.quiz) state.quiz.isActive = false;
+                init(); // Gọi init để load lại đúng trạng thái
+            });
+
+            timerAlertOkBtn?.addEventListener('click', () => {
+                stopAlarm();
+                if (timerAlertModal) hideModal(timerAlertModal); // Kiểm tra element
+            });
+
+            gameBoard?.addEventListener('click', handleTileClick);
+            exitGameBtn?.addEventListener('click', () => {
+                showConfirmModal('Bạn có chắc muốn thoát game? Điểm sẽ không được lưu.', () => {
+                    exitGame();
+                }, "Xác nhận Thoát", "Thoát");
+            });
+            playAgainBtn?.addEventListener('click', playAgain);
+            exitGameModalBtn?.addEventListener('click', exitGame);
+
+            // --- INITIALIZATION ---
+            function init() {
+                try {
+                    loadData();
+                     if (!Array.isArray(state.folders)) state.folders = [];
+                    renderFolders(); // Luôn render folder list
+                    renderStreak(); // Luôn render streak
+                    setTimer(25); // Luôn set timer
+                    // Logic chọn folder active hoặc hiển thị welcome
+                    if (state.activeFolderId && state.folders.some(f => f?.id === state.activeFolderId)) {
+                        renderFlashcards();
+                    } else if (state.folders.length > 0 && state.folders[0]?.id) {
+                         // Nếu activeFolderId không hợp lệ nhưng có folder, chọn folder đầu
+                         state.activeFolderId = state.folders[0].id;
+                         state.currentCardIndex = 0; // Reset index
+                         saveData(); // Lưu lại active folder mới
+                         renderFolders(); // Render lại list để highlight đúng
+                         renderFlashcards();
+                    }
+                     else {
+                         // Nếu không có folder nào
+                         state.activeFolderId = null;
+                         showView('welcome');
+                    }
+                } catch (error) {
+                    console.error("Initialization failed:", error);
+                    localStorage.removeItem('flashcardAppV2');
+                    state = { folders: [], activeFolderId: null, currentCardIndex: 0, streak: { current: 0, lastVisit: null }, quiz: {}, game: {} };
+                    renderFolders(); // Render list trống
+                    renderStreak(); // Render streak 0
+                    setTimer(25); // Set timer về default
+                    showView('welcome'); // Hiển thị welcome
+                    alert("Đã xảy ra lỗi nghiêm trọng khi khởi tạo. Dữ liệu đã được reset về mặc định.");
+                }
+            }
+
+
+            init();
+        });
+    </script>
+</body>
+</html>
+
